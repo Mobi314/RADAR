@@ -7,7 +7,7 @@ import sys
 
 def detect_aircraft(video_path):
     # Load YOLOv4 model
-    model_weights = "yolov4.weights"
+    model_weights = "/Users/timon/Repos/Large File Resources/yolov4.weights"
     model_config = "yolov4.cfg"
     model = cv2.dnn.readNet(model_weights, model_config)
 
