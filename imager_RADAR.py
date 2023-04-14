@@ -4,11 +4,13 @@
 
 import cv2
 import sys
+import numpy as np
+import os
 
 def detect_aircraft(video_path):
     # Load YOLOv4 model
-    model_weights = "/Users/timon/Repos/Large File Resources/yolov4.weights"
-    model_config = "yolov4.cfg"
+    model_weights = "/Users/timon/Repos/Large File Resources/yolov3.weights"
+    model_config = os.path.abspath("yolov3.cfg")
     model = cv2.dnn.readNet(model_weights, model_config)
 
     # Load COCO dataset classes
@@ -40,7 +42,7 @@ def detect_aircraft(video_path):
                 class_id = np.argmax(scores)
                 confidence = scores[class_id]
 
-                if confidence > 0.5 and classes[class_id] == "airplane":
+                if confidence > 0.1 and classes[class_id] == "airplane":
                     center_x, center_y, w, h = (detection[0:4] * np.array([width, height, width, height])).astype("int")
                     x = int(center_x - w / 2)
                     y = int(center_y - h / 2)
@@ -60,7 +62,7 @@ def detect_aircraft(video_path):
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print("Usage: python aircraft_detection.py <video_path>")
+        print("Usage: python3 imager_RADAR.py <video_path>")
         sys.exit(1)
 
     video_path = sys.argv[1]
