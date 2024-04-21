@@ -64,8 +64,26 @@ def run_ocr_process():
     image_path = convert_pdf_to_image(pdf_path)
     gray = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
     data = extract_and_process_cells(image_path, gray)
-    headers = data[0] if data else []  # Assuming the first row contains headers
-    save_to_excel(headers, data[1:])  # Save all but the first row as data
+
+    if not data or not any(data):  # Check if data is empty or all values are empty
+        print("No data extracted from OCR.")
+        return
+
+    # Assuming the first row contains headers
+    headers = data[0] if data else []
+    if not headers:  # Check if headers are empty
+        print("Header information is missing.")
+        return
+
+    # Create DataFrame and save to Excel
+    try:
+        df = pd.DataFrame(data[1:], columns=headers)  # Exclude the first row which is assumed to be headers
+        timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        df.to_excel(f"extracted_data_{timestamp}.xlsx", index=False)
+        print("Data exported to Excel.")
+    except Exception as e:
+        print(f"Error creating or saving DataFrame: {e}")
+
     os.remove(image_path)  # Clean up the page image
 
 def save_to_excel(headers, data):
