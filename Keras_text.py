@@ -1,31 +1,36 @@
+import tensorflow as tf
 import keras_ocr
 import matplotlib.pyplot as plt
-import tensorflow as tf
 
 def test_tensorflow():
-    # Create a TensorFlow tensor
-    tensor = tf.constant([1, 2, 3])
-    # Add 1 to the tensor
-    output = tensor + 1
+    # Create a simple TensorFlow constant
+    hello_tensor = tf.constant('Hello, TensorFlow is working!')
+    tf.print(hello_tensor)
 
-    # Print TensorFlow version and the output of the operation
-    print("TensorFlow version:", tf.__version__)
-    print("Tensor operation result:", output.numpy())
+    # Perform a basic operation
+    a = tf.constant([[1, 2], [3, 4]])
+    b = tf.constant([[1, 1], [1, 1]])  # Create another constant
+    print("TensorFlow addition of two constants: \n", tf.add(a, b).numpy())  # Element-wise addition
 
-# Step 1: Setup the pipeline that handles the detection and recognition.
-pipeline = keras_ocr.pipeline.Pipeline()
+def test_keras_ocr():
+    # Setup keras-ocr pipeline
+    pipeline = keras_ocr.pipeline.Pipeline()
 
-# Step 2: Load a sample image (or you can replace the URL with any image of your choice)
-image_url = 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/a9/Example.jpg/800px-Example.jpg'
-image = keras_ocr.tools.read(url=image_url)
+    # Get a sample image (feel free to replace the URL with any other image URL)
+    image_url = 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/a9/Example.jpg/800px-Example.jpg'
+    images = [keras_ocr.tools.read(url) for url in [image_url]]
 
-# Step 3: Recognize text from the image
-predictions = pipeline.recognize(images=[image])
+    # Recognize text
+    prediction_groups = pipeline.recognize(images)
 
-# Step 4: Draw the results on the image and show it
-fig, ax = plt.subplots(figsize=(10, 10))
-keras_ocr.tools.drawAnnotations(image=image, predictions=predictions[0], ax=ax)
-plt.show()
+    # Plot the predictions
+    fig, axs = plt.subplots(nrows=len(images), figsize=(10, 10))
+    for ax, image, predictions in zip([axs], images, prediction_groups):
+        keras_ocr.tools.drawAnnotations(image=image, predictions=predictions, ax=ax)
+    plt.show()
 
 if __name__ == "__main__":
+    print("Testing TensorFlow...")
     test_tensorflow()
+    print("Testing keras-ocr...")
+    test_keras_ocr()
