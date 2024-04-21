@@ -38,7 +38,17 @@ def convert_pdf_to_image(pdf_path):
     pix = page.get_pixmap(matrix=mat)
     image_path = "page_0.png"
     pix.save(image_path)
+    doc.close()  # Ensure the document is closed
     return image_path
+
+@contextmanager
+def safe_open_image(path):
+    """Context manager for safely opening and closing images."""
+    img = Image.open(path)
+    try:
+        yield img
+    finally:
+        img.close()
 
 def process_image_for_table_detection(image_path):
     """Process the whole image to find table structure and cells."""
@@ -90,17 +100,16 @@ def extract_table_data(image_path, detected_cells):
         print("No cells detected.")
         return []
 
-    image = Image.open(image_path)
-    table_data = []
-    for x, y, w, h in detected_cells:
-        cell_image = image.crop((x, y, x + w, y + h))
-        cell_image_cv = np.array(cell_image)
-        enhanced_image = enhance_image_for_ocr(cell_image_cv)
-        config = '--oem 1 --psm 6'
-        cell_text = pytesseract.image_to_string(enhanced_image, config=config)
-        cell_text = ' '.join(cell_text.split())  # Remove unnecessary whitespace
-        table_data.append(cell_text)
-
+    with safe_open_image(image_path) as image:
+        table_data = []
+        for x, y, w, h in sorted_rows:
+            cell_image = image.crop((x, y, x + w, y + h))
+            cell_image_cv = np.array(cell_image)
+            enhanced_image = enhance_image_for_ocr(cell_image_cv)
+            config = '--oem 1 --psm 6'
+            cell_text = pytesseract.image_to_string(enhanced_image, config=config)
+            cell_text = ' '.join(cell_text.split())
+            table_data.append(cell_text)
     return table_data
 
 def save_to_excel(table_data, base_filename="output"):
@@ -127,5 +136,26 @@ def select_pdf_and_convert():
         print("No tables detected.")
     cv2.destroyAllWindows()  # Close all OpenCV windows
 
+def remove_image_file(image_path):
+    """Remove an image file with retries on permission error."""
+    max_attempts = 5
+    for attempt in range(max_attempts):
+        try:
+            os.remove(image_path)
+            print(f"File {image_path} successfully deleted.")
+            break
+        except PermissionError as e:
+            print(f"Attempt {attempt + 1} failed: {str(e)}")
+            time.sleep(1)  # Wait before retrying
+    else:
+        print(f"Failed to delete the file {image_path} after {max_attempts} attempts.")
+
 if __name__ == "__main__":
-    select_pdf_and_convert()
+    pdf_path = select_pdf_and_convert()
+    image_path = convert_pdf_to_image(pdf_path)
+    detected_cells = process_image_for_table_detection(image_path)
+    sorted_rows = classify_cells(detected_cells)
+    if sorted_rows:
+        table_data = extract_table_data(image_path, sorted_rows)
+        save_to_excel(table_data)
+    remove_image_file(image_path)
