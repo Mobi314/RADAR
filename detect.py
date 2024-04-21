@@ -12,28 +12,23 @@ import tempfile
 import io
 
 def enhance_image_for_ocr(cell_image):
-    # Convert to grayscale
+    # Convert to grayscale for more consistent processing
     gray = cv2.cvtColor(cell_image, cv2.COLOR_BGR2GRAY)
     
-    # Applying CLAHE to improve contrast
-    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
-    contrast = clahe.apply(gray)
+    # Applying a more dynamic CLAHE for better contrast adjustment
+    clahe = cv2.createCLAHE(clipLimit=4.0, tileGridSize=(8, 8))
+    contrast_enhanced = clahe.apply(gray)
 
-    # Denoising
-    denoised = cv2.fastNlMeansDenoising(contrast, None, 10, 7, 21)
+    # Use a bilateral filter for edge-preserving noise reduction
+    smoothed = cv2.bilateralFilter(contrast_enhanced, d=9, sigmaColor=75, sigmaSpace=75)
 
-    # Sharpening
-    kernel = np.array([[-1,-1,-1], [-1,9,-1], [-1,-1,-1]])
-    sharpened = cv2.filter2D(denoised, -1, kernel)
+    # Adaptive thresholding to create a binary image with better foreground-background separation
+    binary = cv2.adaptiveThreshold(smoothed, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
 
-    # Thresholding to get a binary image
-    _, binary = cv2.threshold(sharpened, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-
-    # Optionally, dilate and erode to clean up small specks and holes
-    dilate_kernel = np.ones((2,2), np.uint8)
-    dilated = cv2.dilate(binary, dilate_kernel, iterations=1)
-    erode_kernel = np.ones((1,1), np.uint8)
-    eroded = cv2.erode(dilated, erode_kernel, iterations=1)
+    # Dilate to close gaps in text, followed by erosion to thin the text slightly
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (1, 1))
+    dilated = cv2.dilate(binary, kernel, iterations=1)
+    eroded = cv2.erode(dilated, kernel, iterations=1)
 
     return eroded
 
@@ -57,34 +52,20 @@ def enhance_lines(image):
     processed_img = cv2.morphologyEx(combined_lines, cv2.MORPH_CLOSE, kernel, iterations=3)
     return processed_img
 
-def perform_ocr_on_cell(cell_image):
-    # Convert to grayscale for more straightforward processing
-    gray = cv2.cvtColor(cell_image, cv2.COLOR_BGR2GRAY)
+def perform_ocr_on_cell(cell_image, numeric=False):
+    # Prepare the image for OCR
+    enhanced_image = enhance_image_for_ocr(cell_image)
     
-    # Apply CLAHE (Contrast Limited Adaptive Histogram Equalization) for better contrast
-    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
-    contrast_enhanced = clahe.apply(gray)
-
-    # Noise reduction through Gaussian Blur
-    blur = cv2.GaussianBlur(contrast_enhanced, (3, 3), 0)
-
-    # Apply adaptive thresholding to create a binary image
-    _, binary = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
-
-    # Dilate the text to make it more coherent for OCR
-    kernel = np.ones((2, 2), np.uint8)
-    dilated = cv2.dilate(binary, kernel, iterations=1)
-
-    # Additional erosion to thin the text, enhancing separation
-    eroded = cv2.erode(dilated, kernel, iterations=1)
-
-    # Optional: Remove any small noise left with further erosion
-    small_noise_kernel = np.ones((1, 1), np.uint8)
-    refined = cv2.erode(eroded, small_noise_kernel, iterations=1)
-
-    # OCR using Pytesseract with advanced configurations for better text segmentation
-    custom_config = r'--oem 3 --psm 6'  # Use LSTM engine and assume a single uniform block of text
-    text = pytesseract.image_to_string(refined, config=custom_config)
+    # Define custom configurations based on the type of data expected
+    if numeric:
+        # Optimize for numeric data
+        custom_config = r'--oem 3 --psm 6 outputbase digits'
+    else:
+        # General alphanumerical data
+        custom_config = r'--oem 3 --psm 6'
+    
+    # Performing OCR using Pytesseract with specified configurations
+    text = pytesseract.image_to_string(enhanced_image, config=custom_config)
     return format_continuous_text(text)
 
 def convert_pdf_to_image(pdf_path):
@@ -153,6 +134,12 @@ def validate_and_append_cell(contour, detected_cells):
         else:
             print(f"Invalid or incomplete bounding box derived from contour.")
 
+def crop_image_with_padding(cell_image, padding=5):
+    # Apply padding to reduce the effect of borders
+    h, w = cell_image.shape[:2]
+    cropped_image = cell_image[padding:h-padding, padding:w-padding]
+    return cropped_image
+
 def process_image_for_table_detection(image):
     if image is None or image.size == 0:
         print("Empty or None image passed to process_image_for_table_detection.")
@@ -216,6 +203,16 @@ def classify_cells(detected_cells):
         sorted_cells = sorted(rows[y], key=lambda cell: cell[0])
         sorted_rows.append(sorted_cells)
     return sorted_rows
+
+def extract_and_process_cell(image, bounding_box, numeric=False):
+    x, y, w, h = bounding_box
+    # Extract the cell using the bounding box and apply padding
+    cell_image = image[y:y+h, x:x+w]
+    cropped_image = crop_image_with_padding(cell_image)
+    
+    # Perform OCR on the cropped image
+    cell_text = perform_ocr_on_cell(cropped_image, numeric=numeric)
+    return cell_text
 
 def format_continuous_text(text):
     return ' '.join(text.split())
