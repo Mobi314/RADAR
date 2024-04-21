@@ -10,12 +10,16 @@ import datetime
 import os
 
 def enhance_lines(image):
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    """Enhance lines in the image to help with cell detection."""
+    if len(image.shape) == 3:  # Check if the image is colored
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    else:
+        gray = image  # Image is already grayscale
     blur = cv2.GaussianBlur(gray, (5, 5), 0)
     thresh = cv2.adaptiveThreshold(blur, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 11, 2)
     kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (15, 1))
     dilated = cv2.dilate(thresh, kernel, iterations=1)
-    return dilated, gray  # Returning the dilated image and the original gray image for contour extraction
+    return dilated, gray  # Returning both processed and original grayscale image for contour extraction
 
 def display_image_with_contours(image, contours):
     for contour in contours:
@@ -28,12 +32,13 @@ def display_image_with_contours(image, contours):
     cv2.destroyAllWindows()
 
 def extract_and_process_cells(image_path, gray):
-    processed, _ = enhance_lines(gray)
+    """Extract cells from the image and process them for OCR."""
+    processed, gray = enhance_lines(gray)  # Make sure gray is correctly passed
     contours, _ = cv2.findContours(processed, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     cells = []
     data = []
 
-    display_image_with_contours(gray, contours)  # Display with overlays
+    display_image_with_contours(gray, contours)  # Ensure gray image is used here
 
     for contour in contours:
         x, y, w, h = cv2.boundingRect(contour)
