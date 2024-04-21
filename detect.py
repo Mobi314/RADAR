@@ -39,18 +39,16 @@ def enhance_lines(image):
     return processed_img
 
 def perform_ocr_on_cell(cell_image):
-    """Apply OCR to the cell image with enhanced preprocessing."""
-    # Convert to grayscale and enhance contrast
+    # Convert to grayscale
     gray = cv2.cvtColor(cell_image, cv2.COLOR_BGR2GRAY)
-    enhanced = cv2.equalizeHist(gray)  # Equalize the histogram to improve contrast
-
+    # Increase contrast using CLAHE (Contrast Limited Adaptive Histogram Equalization)
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
+    contrast_enhanced = clahe.apply(gray)
     # Apply Gaussian blur to reduce noise
-    blur = cv2.GaussianBlur(enhanced, (3, 3), 0)
-
+    blur = cv2.GaussianBlur(contrast_enhanced, (3, 3), 0)
     # Apply binary threshold
     _, binary = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-    
-    # OCR using Pytesseract
+    # OCR using Pytesseract with custom configurations to handle single line and sparse text better
     custom_config = r'--oem 3 --psm 6'
     text = pytesseract.image_to_string(binary, config=custom_config)
     return format_continuous_text(text)
@@ -213,11 +211,11 @@ def extract_table_data(image, detected_cells):
     return table_data
 
 def save_to_excel(table_data, base_filename="output"):
-    """Save the table data to an Excel file, with each sublist as a row."""
+    """Save the table data to an Excel file, ensuring no unintended header row."""
     current_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     filename = f"{base_filename}_{current_time}.xlsx"
-    df = pd.DataFrame(table_data)  # Each sublist in table_data is a row in Excel
-    df.to_excel(filename, index=False)
+    df = pd.DataFrame(table_data)  # Confirming that no header row is formed from indices
+    df.to_excel(filename, index=False, header=None)  # Ensure no header is used
     print(f"Data exported to Excel file {filename}")
 
 def select_pdf_and_convert():
