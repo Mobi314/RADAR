@@ -265,29 +265,44 @@ def extract_table_data(image, detected_cells):
     return table_data
 
 def clean_text(text):
-    # Strip leading/trailing whitespace and replace non-breaking spaces
+    """Clean text by removing non-printable characters and trimming whitespace."""
     cleaned_text = text.strip().replace(u'\xa0', u' ')
-    # Optionally, remove non-printable characters
     printable = set(string.printable)
     cleaned_text = ''.join(filter(lambda x: x in printable, cleaned_text))
     return cleaned_text
 
 def save_to_excel(table_data, base_filename="output"):
-    """Save the table data to an Excel file, ensuring clean data and no unintended header row."""
+    """Save the table data to an Excel file, ensuring no unintended header row."""
     cleaned_data = []
     for row in table_data:
-        # Clean each cell in the row
         cleaned_row = [clean_text(cell) for cell in row]
         cleaned_data.append(cleaned_row)
-    
+
+    # Debug: Print cleaned data before exporting to Excel
+    print("Cleaned Data for Excel:")
+    for row in cleaned_data:
+        print(row)
+
     current_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     filename = f"{base_filename}_{current_time}.xlsx"
     df = pd.DataFrame(cleaned_data)
+    print("DataFrame Head:", df.head())  # Print the first few rows of the DataFrame
+
     try:
         df.to_excel(filename, index=False, header=False)  # Ensure no header is used
         print(f"Data exported to Excel file {filename}")
     except Exception as e:
         print(f"Error writing to Excel: {e}")
+
+# Test exporting a simple DataFrame to ensure Excel compatibility
+def test_excel_output():
+    print("Testing basic DataFrame export...")
+    df_test = pd.DataFrame({'Numbers': [1, 2, 3], 'Letters': ['A', 'B', 'C']})
+    try:
+        df_test.to_excel("test_output.xlsx", index=False)
+        print("Test Excel file created successfully.")
+    except Exception as e:
+        print("Failed to create test Excel file:", e)
 
 def select_pdf_and_convert():
     root = tk.Tk()
@@ -315,4 +330,5 @@ def remove_image_file(image_path):
         print("No valid image path provided for deletion.")
 
 if __name__ == "__main__":
-    pdf_path = select_pdf_and_convert()
+    #pdf_path = select_pdf_and_convert()
+    test_excel_output()
