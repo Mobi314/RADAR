@@ -19,25 +19,23 @@ def enhance_image_for_ocr(image):
     return binary
 
 def enhance_lines(image):
-    if image is None or image.size == 0:
-        print("Empty or None image passed to enhance_lines.")
-        return None
+    # Convert to grayscale
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    # Apply a combination of Gaussian Blur and adaptive threshold
+    blur = cv2.GaussianBlur(gray, (7, 7), 0)
+    thresh = cv2.adaptiveThreshold(blur, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+                                   cv2.THRESH_BINARY_INV, 11, 2)
 
-    try:
-        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        blur = cv2.GaussianBlur(gray, (5, 5), 0)
-        thresh = cv2.adaptiveThreshold(blur, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 11, 2)
-    except cv2.error as e:
-        print(f"Error in cv2 operations: {e}")
-        return None
+    # Modify kernel size based on expected cell size, these values might need tuning
+    horizontal_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (15, 1))
+    vertical_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (1, 15))
 
-    horizontal_kernel_length = max(20, int(image.shape[1] / 30))
-    vertical_kernel_length = max(20, int(image.shape[0] / 30))
-    horizontal_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (horizontal_kernel_length, 1))
-    vertical_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (1, vertical_kernel_length))
     horizontal_lines = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, horizontal_kernel, iterations=2)
     vertical_lines = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, vertical_kernel, iterations=2)
+
+    # Combine the horizontal and vertical lines
     combined_lines = cv2.addWeighted(horizontal_lines, 0.5, vertical_lines, 0.5, 0.0)
+    # Additional morphological closing can help close gaps in lines
     kernel = np.ones((3, 3), np.uint8)
     processed_img = cv2.morphologyEx(combined_lines, cv2.MORPH_CLOSE, kernel, iterations=3)
     return processed_img
@@ -117,40 +115,24 @@ def validate_and_append_cell(contour, detected_cells):
             print(f"Invalid or incomplete bounding box derived from contour.")
 
 def process_image_for_table_detection(image):
-    if image is None:
-        print("Empty or None Image passed to process_image_for_table_detection.")
-        return [], None
-
     processed_img = enhance_lines(image)
-    if processed_img is None:
-        return [], image
-
-    contours, _ = cv2.findContours(processed_img, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    contours, hierarchy = cv2.findContours(processed_img, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     detected_cells = []
 
-    # Create a copy of the image for drawing
-    image_with_cells = image.copy()
+    # Optionally, visualize the processed image for debugging
+    cv2.imshow("Processed Image for Table Detection", processed_img)
+    cv2.waitKey(0)
+
     for contour in contours:
-        if cv2.contourArea(contour) > 100:
-            bounding_box = get_valid_bounding_box(contour)
-            if bounding_box:  # Ensure only valid bounding boxes are added
-                detected_cells.append(bounding_box)
-                # Draw each bounding box on the image
-                x, y, w, h = bounding_box
-                cv2.rectangle(image_with_cells, (x, y), (x + w, y + h), (0, 255, 0), 2)
-            else:
-                print(f"Invalid bounding box for contour with area {cv2.contourArea(contour)}")
-        else:
-            # Optionally draw contours that were considered but not used
-            cv2.drawContours(image_with_cells, [contour], -1, (0, 0, 255), 1)
+        # Consider adding more sophisticated checks based on the contour properties
+        if cv2.contourArea(contour) > 100 and cv2.contourArea(contour) < 5000:  # Adjust area range as needed
+            x, y, w, h = cv2.boundingRect(contour)
+            if 0.5 < w/h < 2:  # Optional: Check for aspect ratio to filter out non-cell-like contours
+                detected_cells.append((x, y, w, h))
+                cv2.rectangle(image, (x, y), (x + w, y + h), (0, 255, 0), 2)
 
-    if not detected_cells:
-        print("No tables detected.")
-        return [], image
-
-    # Display the image with detected cells
-    cv2.imshow("Detected Cells", image_with_cells)
-    cv2.waitKey(0)  # Wait for a key press to close
+    cv2.imshow("Detected Cells", image)
+    cv2.waitKey(0)
     cv2.destroyAllWindows()
 
     return detected_cells, image
