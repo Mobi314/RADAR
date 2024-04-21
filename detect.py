@@ -7,6 +7,8 @@ import tkinter as tk
 from tkinter import filedialog
 import pandas as pd
 from datetime import datetime
+import os
+import tempfile
 
 def enhance_image_for_ocr(image):
     """Enhance the image for better OCR recognition."""
