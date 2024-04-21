@@ -128,17 +128,30 @@ def process_image_for_table_detection(image):
     contours, _ = cv2.findContours(processed_img, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     detected_cells = []
 
+    # Create a copy of the image for drawing
+    image_with_cells = image.copy()
     for contour in contours:
         if cv2.contourArea(contour) > 100:
             bounding_box = get_valid_bounding_box(contour)
             if bounding_box:  # Ensure only valid bounding boxes are added
                 detected_cells.append(bounding_box)
+                # Draw each bounding box on the image
+                x, y, w, h = bounding_box
+                cv2.rectangle(image_with_cells, (x, y), (x + w, y + h), (0, 255, 0), 2)
             else:
                 print(f"Invalid bounding box for contour with area {cv2.contourArea(contour)}")
+        else:
+            # Optionally draw contours that were considered but not used
+            cv2.drawContours(image_with_cells, [contour], -1, (0, 0, 255), 1)
 
     if not detected_cells:
         print("No tables detected.")
         return [], image
+
+    # Display the image with detected cells
+    cv2.imshow("Detected Cells", image_with_cells)
+    cv2.waitKey(0)  # Wait for a key press to close
+    cv2.destroyAllWindows()
 
     return detected_cells, image
 
