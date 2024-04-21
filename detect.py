@@ -11,12 +11,31 @@ import os
 import tempfile
 import io
 
-def enhance_image_for_ocr(image):
-    """Enhance the image for better OCR recognition."""
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    blur = cv2.GaussianBlur(gray, (5, 5), 0)
-    _, binary = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-    return binary
+def enhance_image_for_ocr(cell_image):
+    # Convert to grayscale
+    gray = cv2.cvtColor(cell_image, cv2.COLOR_BGR2GRAY)
+    
+    # Applying CLAHE to improve contrast
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
+    contrast = clahe.apply(gray)
+
+    # Denoising
+    denoised = cv2.fastNlMeansDenoising(contrast, None, 10, 7, 21)
+
+    # Sharpening
+    kernel = np.array([[-1,-1,-1], [-1,9,-1], [-1,-1,-1]])
+    sharpened = cv2.filter2D(denoised, -1, kernel)
+
+    # Thresholding to get a binary image
+    _, binary = cv2.threshold(sharpened, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+
+    # Optionally, dilate and erode to clean up small specks and holes
+    dilate_kernel = np.ones((2,2), np.uint8)
+    dilated = cv2.dilate(binary, dilate_kernel, iterations=1)
+    erode_kernel = np.ones((1,1), np.uint8)
+    eroded = cv2.erode(dilated, erode_kernel, iterations=1)
+
+    return eroded
 
 def enhance_lines(image):
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
@@ -39,18 +58,33 @@ def enhance_lines(image):
     return processed_img
 
 def perform_ocr_on_cell(cell_image):
-    # Convert to grayscale
+    # Convert to grayscale for more straightforward processing
     gray = cv2.cvtColor(cell_image, cv2.COLOR_BGR2GRAY)
-    # Increase contrast using CLAHE (Contrast Limited Adaptive Histogram Equalization)
-    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
+    
+    # Apply CLAHE (Contrast Limited Adaptive Histogram Equalization) for better contrast
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
     contrast_enhanced = clahe.apply(gray)
-    # Apply Gaussian blur to reduce noise
+
+    # Noise reduction through Gaussian Blur
     blur = cv2.GaussianBlur(contrast_enhanced, (3, 3), 0)
-    # Apply binary threshold
-    _, binary = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-    # OCR using Pytesseract with custom configurations to handle single line and sparse text better
-    custom_config = r'--oem 3 --psm 6'
-    text = pytesseract.image_to_string(binary, config=custom_config)
+
+    # Apply adaptive thresholding to create a binary image
+    _, binary = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+
+    # Dilate the text to make it more coherent for OCR
+    kernel = np.ones((2, 2), np.uint8)
+    dilated = cv2.dilate(binary, kernel, iterations=1)
+
+    # Additional erosion to thin the text, enhancing separation
+    eroded = cv2.erode(dilated, kernel, iterations=1)
+
+    # Optional: Remove any small noise left with further erosion
+    small_noise_kernel = np.ones((1, 1), np.uint8)
+    refined = cv2.erode(eroded, small_noise_kernel, iterations=1)
+
+    # OCR using Pytesseract with advanced configurations for better text segmentation
+    custom_config = r'--oem 3 --psm 6'  # Use LSTM engine and assume a single uniform block of text
+    text = pytesseract.image_to_string(refined, config=custom_config)
     return format_continuous_text(text)
 
 def convert_pdf_to_image(pdf_path):
