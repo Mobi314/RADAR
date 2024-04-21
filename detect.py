@@ -34,16 +34,23 @@ def enhance_lines(image):
 
 def convert_pdf_to_image(pdf_path):
     doc = fitz.open(pdf_path)
-    page = doc.load_page(0)  # Only the first page
+    if not doc.page_count:  # Check if the document contains any pages
+        print("No pages found in document.")
+        doc.close()
+        return None
+
+    try:
+        page = doc.load_page(0)  # Attempt to load the first page
+    except IndexError:
+        print("Page index out of range.")
+        doc.close()
+        return None
+
     zoom = 2.5
     mat = fitz.Matrix(zoom, zoom)
     pix = page.get_pixmap(matrix=mat)
-    # Use a temporary file for the image, ensuring it is automatically deleted
-    with tempfile.NamedTemporaryFile(suffix=".png") as temp_img:
-        image_path = temp_img.name
-        pix.save(image_path)
-        # Make a copy of the image data to release the file handle by `fitz`
-        img = cv2.imread(image_path)
+    img = np.array(Image.open(io.BytesIO(pix.tobytes("png"))))  # Convert to an array directly
+
     doc.close()
     return img
 
@@ -56,16 +63,16 @@ def safe_open_image(path):
         img.close()
 
 def process_image_for_table_detection(image):
-    """Process the whole image to find table structure and cells."""
     processed_img = enhance_lines(image)
     contours, _ = cv2.findContours(processed_img, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     detected_cells = []
+
     for contour in contours:
-        if cv2.contourArea(contour) > 100:
+        if cv2.contourArea(contour) > 100:  # Filter out too small contours
             x, y, w, h = cv2.boundingRect(contour)
-            cv2.rectangle(image, (x, y), (x + w, y + h), (0, 255, 0), 1)
-            detected_cells.append((x, y, w, h))
-    return detected_cells, image
+            detected_cells.append((x, y, w, h))  # Ensure always four elements
+
+    return detected_cells, image  # Return both the cells and the image for further processing
 
 def classify_cells(detected_cells):
     rows = {}
