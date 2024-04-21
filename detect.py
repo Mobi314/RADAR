@@ -117,24 +117,40 @@ def validate_and_append_cell(contour, detected_cells):
             print(f"Invalid or incomplete bounding box derived from contour.")
 
 def process_image_for_table_detection(image):
+    if image is None:
+        print("Empty or None Image passed to process_image_for_table_detection.")
+        return [], None
+
     processed_img = enhance_lines(image)
-    contours, hierarchy = cv2.findContours(processed_img, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    if processed_img is None:
+        return [], image
+
+    contours, _ = cv2.findContours(processed_img, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     detected_cells = []
 
-    # Optionally, visualize the processed image for debugging
-    cv2.imshow("Processed Image for Table Detection", processed_img)
-    cv2.waitKey(0)
-
+    # Create a copy of the image for drawing
+    image_with_cells = image.copy()
     for contour in contours:
-        # Consider adding more sophisticated checks based on the contour properties
-        if cv2.contourArea(contour) > 100 and cv2.contourArea(contour) < 5000:  # Adjust area range as needed
-            x, y, w, h = cv2.boundingRect(contour)
-            if 0.5 < w/h < 2:  # Optional: Check for aspect ratio to filter out non-cell-like contours
-                detected_cells.append((x, y, w, h))
-                cv2.rectangle(image, (x, y), (x + w, y + h), (0, 255, 0), 2)
+        if cv2.contourArea(contour) > 100:
+            bounding_box = get_valid_bounding_box(contour)
+            if bounding_box:  # Ensure only valid bounding boxes are added
+                detected_cells.append(bounding_box)
+                # Draw each bounding box on the image
+                x, y, w, h = bounding_box
+                cv2.rectangle(image_with_cells, (x, y), (x + w, y + h), (0, 255, 0), 2)
+            else:
+                print(f"Invalid bounding box for contour with area {cv2.contourArea(contour)}")
+        else:
+            # Optionally draw contours that were considered but not used
+            cv2.drawContours(image_with_cells, [contour], -1, (0, 0, 255), 1)
 
-    cv2.imshow("Detected Cells", image)
-    cv2.waitKey(0)
+    if not detected_cells:
+        print("No tables detected.")
+        return [], image
+
+    # Display the image with detected cells
+    cv2.imshow("Detected Cells", image_with_cells)
+    cv2.waitKey(0)  # Wait for a key press to close
     cv2.destroyAllWindows()
 
     return detected_cells, image
