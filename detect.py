@@ -9,6 +9,7 @@ import pandas as pd
 from datetime import datetime
 import os
 import tempfile
+import io
 
 def enhance_image_for_ocr(image):
     """Enhance the image for better OCR recognition."""
@@ -42,6 +43,10 @@ def enhance_lines(image):
     return processed_img
 
 def convert_pdf_to_image(pdf_path):
+    if not os.path.exists(pdf_path):
+        print("PDF file does not exist.")
+        return None
+    
     doc = fitz.open(pdf_path)
     if doc.page_count == 0:
         print("No pages found in document.")
@@ -58,7 +63,7 @@ def convert_pdf_to_image(pdf_path):
     zoom = 2.5
     mat = fitz.Matrix(zoom, zoom)
     pix = page.get_pixmap(matrix=mat)
-    img = np.array(Image.open(io.BytesIO(pix.tobytes("png"))))
+    img = np.array(Image.open(io.BytesIO(pix.tobytes())))
     doc.close()
 
     if img.size == 0:
@@ -75,16 +80,27 @@ def safe_open_image(path):
         img.close()
 
 def process_image_for_table_detection(image):
+    if image is None:
+        print("Empty or None Image passed to process_image_for_table_detection.")
+        return [], None
+
     processed_img = enhance_lines(image)
+    if processed_img is None:
+        return [], image
+
     contours, _ = cv2.findContours(processed_img, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     detected_cells = []
 
     for contour in contours:
-        if cv2.contourArea(contour) > 100:  # Filter out too small contours
+        if cv2.contourArea(contour) > 100:
             x, y, w, h = cv2.boundingRect(contour)
-            detected_cells.append((x, y, w, h))  # Ensure always four elements
+            detected_cells.append((x, y, w, h))
 
-    return detected_cells, image  # Return both the cells and the image for further processing
+    if not detected_cells:
+        print("No tables detected.")
+        return [], image
+
+    return detected_cells, image
 
 def classify_cells(detected_cells):
     rows = {}
@@ -156,15 +172,17 @@ def select_pdf_and_convert():
     cv2.destroyAllWindows()  # Close all OpenCV windows
 
 def remove_image_file(image_path):
-    """Remove an image file with more robust handling."""
-    try:
-        os.remove(image_path)
-        print(f"File {image_path} successfully deleted.")
-    except PermissionError as e:
-        print(f"Error deleting file {image_path}: {str(e)}")
+    if image_path:
+        try:
+            os.remove(image_path)
+            print(f"File {image_path} successfully deleted.")
+        except Exception as e:
+            print(f"Error deleting file {image_path}: {e}")
+    else:
+        print("No valid image path provided for deletion.")
 
 if __name__ == "__main__":
-    pdf_path = select_pdf_and_convert()
+    #pdf_path = select_pdf_and_convert()
     image_path = convert_pdf_to_image(pdf_path)
     detected_cells, image = process_image_for_table_detection(image_path)
     sorted_rows = classify_cells(detected_cells)
