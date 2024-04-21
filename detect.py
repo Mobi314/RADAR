@@ -38,13 +38,14 @@ def convert_pdf_to_image(pdf_path):
     zoom = 2.5
     mat = fitz.Matrix(zoom, zoom)
     pix = page.get_pixmap(matrix=mat)
-    # Create a temporary file for the image
-    temp_img = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
-    image_path = temp_img.name
-    pix.save(image_path)
-    temp_img.close()  # Close the file handle so the image can be read by other functions
+    # Use a temporary file for the image, ensuring it is automatically deleted
+    with tempfile.NamedTemporaryFile(suffix=".png") as temp_img:
+        image_path = temp_img.name
+        pix.save(image_path)
+        # Make a copy of the image data to release the file handle by `fitz`
+        img = cv2.imread(image_path)
     doc.close()
-    return image_path
+    return img
 
 def safe_open_image(path):
     """Context manager for safely opening and closing images."""
@@ -54,25 +55,17 @@ def safe_open_image(path):
     finally:
         img.close()
 
-def process_image_for_table_detection(image_path):
+def process_image_for_table_detection(image):
     """Process the whole image to find table structure and cells."""
-    image = cv2.imread(image_path)
     processed_img = enhance_lines(image)
-    contours, hierarchy = cv2.findContours(processed_img, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    contours, _ = cv2.findContours(processed_img, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     detected_cells = []
-
-    # Ensure we have contours to work with
-    if contours:
-        for contour in contours:
-            if cv2.contourArea(contour) > 100:  # Filter small contours that may not be cells
-                x, y, w, h = cv2.boundingRect(contour)
-                cv2.rectangle(image, (x, y), (x + w, y + h), (0, 255, 0), 1)
-                detected_cells.append((x, y, w, h))
-
-    cv2.imshow("Detected Cells", image)
-    cv2.waitKey(1)  # Short delay to display the image
-    cv2.destroyAllWindows()  # Close the window after display
-    return detected_cells
+    for contour in contours:
+        if cv2.contourArea(contour) > 100:
+            x, y, w, h = cv2.boundingRect(contour)
+            cv2.rectangle(image, (x, y), (x + w, y + h), (0, 255, 0), 1)
+            detected_cells.append((x, y, w, h))
+    return detected_cells, image
 
 def classify_cells(detected_cells):
     # Group cells by rows based on y-coordinate proximity
@@ -104,16 +97,15 @@ def extract_table_data(image_path, detected_cells):
         print("No cells detected.")
         return []
 
-    with safe_open_image(image_path) as image:
-        table_data = []
-        for x, y, w, h in sorted_rows:
-            cell_image = image.crop((x, y, x + w, y + h))
-            cell_image_cv = np.array(cell_image)
-            enhanced_image = enhance_image_for_ocr(cell_image_cv)
-            config = '--oem 1 --psm 6'
-            cell_text = pytesseract.image_to_string(enhanced_image, config=config)
-            cell_text = ' '.join(cell_text.split())
-            table_data.append(cell_text)
+    """Extract data from each cell and compile table data."""
+    table_data = []
+    for x, y, w, h in detected_cells:
+        cell_image = image[y:y+h, x:x+w]
+        enhanced_image = enhance_image_for_ocr(cell_image)
+        config = '--oem 1 --psm 6'
+        cell_text = pytesseract.image_to_string(enhanced_image, config=config)
+        cell_text = ' '.join(cell_text.split())
+        table_data.append(cell_text)
     return table_data
 
 def save_to_excel(table_data, base_filename="output"):
