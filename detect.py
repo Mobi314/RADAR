@@ -122,29 +122,25 @@ def process_image_for_table_detection(image):
         print("Empty or None Image passed to process_image_for_table_detection.")
         return [], None
 
-    contours, _ = cv2.findContours(processed_img, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    # Changing the retrieval mode to capture all contours and organize them into a hierarchy
+    contours, hierarchy = cv2.findContours(processed_img, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_SIMPLE)
     detected_cells = []
 
-    # Create a copy of the image for drawing
-    image_with_cells = image.copy()
-    for contour in contours:
-        if cv2.contourArea(contour) > 100:
-            bounding_box = get_valid_bounding_box(contour)
-            if bounding_box:  # Ensure only valid bounding boxes are added
-                detected_cells.append(bounding_box)
-                # Here we use the safe tuple access
-                x, y, w, h = safe_tuple_access(bounding_box)
+    if hierarchy is not None:
+        hierarchy = hierarchy[0]  # Get the actual hierarchy array
+        for i, contour in enumerate(contours):
+            # Filter to include only child contours (assuming cells are children of table contours)
+            if hierarchy[i][3] != -1:  # Has parent, thus it's a cell not the outer table
+                x, y, w, h = cv2.boundingRect(contour)
                 if w > 0 and h > 0:
-                    cv2.rectangle(image_with_cells, (x, y), (x + w, y + h), (0, 255, 0), 2)
-            else:
-                print(f"Invalid bounding box for contour with area {cv2.contourArea(contour)}")
+                    detected_cells.append((x, y, w, h))
+                    cv2.rectangle(image, (x, y), (x + w, y + h), (0, 255, 0), 2)
 
     if not detected_cells:
         print("No tables detected.")
         return [], image
 
-    # Display the image with detected cells
-    cv2.imshow("Detected Cells", image_with_cells)
+    cv2.imshow("Detected Cells", image)
     cv2.waitKey(0)  # Wait for a key press to close
     cv2.destroyAllWindows()
 
