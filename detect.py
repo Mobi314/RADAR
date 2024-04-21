@@ -42,6 +42,12 @@ def enhance_lines(image):
     processed_img = cv2.morphologyEx(combined_lines, cv2.MORPH_CLOSE, kernel, iterations=3)
     return processed_img
 
+def perform_ocr_on_cell(cell_image):
+    """Perform OCR on the provided cell image using PyTesseract."""
+    enhanced_image = enhance_image_for_ocr(cell_image)  # Assuming this returns a binary image ready for OCR
+    text = pytesseract.image_to_string(enhanced_image, config='--psm 6')
+    return format_continuous_text(text)  # Cleans up the text
+
 def convert_pdf_to_image(pdf_path):
     if not os.path.exists(pdf_path):
         print("PDF file does not exist.")
@@ -139,15 +145,14 @@ def process_image_for_table_detection(image):
 def classify_cells(detected_cells):
     rows = {}
     for cell in detected_cells:
-        if len(cell) == 4:
-            x, y, w, h = cell  # This unpacks four elements
-        else:
-            print(f"Detected cell tuple has incorrect format: {cell}")
-            continue  # Skip this iteration to avoid the error
+        x, y, w, h = safe_tuple_access(cell)  # Safely unpacks tuple
+        if w == 0 or h == 0:
+            print(f"Skipping malformed cell: {cell}")
+            continue  # Skip this cell if dimensions are zero
 
         row_found = False
         for key in rows.keys():
-            if abs(key - y) < 10:  # 10 is a threshold for grouping cells in the same row
+            if abs(key - y) < 10:  # Grouping cells in the same row
                 rows[key].append((x, y, w, h))
                 row_found = True
                 break
@@ -157,13 +162,6 @@ def classify_cells(detected_cells):
     sorted_rows = []
     for y in sorted(rows.keys()):
         sorted_cells = sorted(rows[y], key=lambda cell: cell[0])
-        sorted_rows.append(sorted_cells)
-    return sorted_rows
-
-    # Sort rows and cells within rows
-    sorted_rows = []
-    for y in sorted(rows.keys()):
-        sorted_cells = sorted(rows[y], key=lambda cell: cell[0])  # Sort cells in a row by x-coordinate
         sorted_rows.append(sorted_cells)
     return sorted_rows
 
