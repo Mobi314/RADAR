@@ -263,13 +263,30 @@ def extract_table_data(image, detected_cells):
 
     return table_data
 
+def clean_text(text):
+    # Strip leading/trailing whitespace and replace non-breaking spaces
+    cleaned_text = text.strip().replace(u'\xa0', u' ')
+    # Optionally, remove non-printable characters
+    printable = set(string.printable)
+    cleaned_text = ''.join(filter(lambda x: x in printable, cleaned_text))
+    return cleaned_text
+
 def save_to_excel(table_data, base_filename="output"):
-    """Save the table data to an Excel file, ensuring no unintended header row."""
+    """Save the table data to an Excel file, ensuring clean data and no unintended header row."""
+    cleaned_data = []
+    for row in table_data:
+        # Clean each cell in the row
+        cleaned_row = [clean_text(cell) for cell in row]
+        cleaned_data.append(cleaned_row)
+    
     current_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     filename = f"{base_filename}_{current_time}.xlsx"
-    df = pd.DataFrame(table_data)  # Confirming that no header row is formed from indices
-    df.to_excel(filename, index=False, header=None)  # Ensure no header is used
-    print(f"Data exported to Excel file {filename}")
+    df = pd.DataFrame(cleaned_data)
+    try:
+        df.to_excel(filename, index=False, header=False)  # Ensure no header is used
+        print(f"Data exported to Excel file {filename}")
+    except Exception as e:
+        print(f"Error writing to Excel: {e}")
 
 def select_pdf_and_convert():
     root = tk.Tk()
