@@ -275,10 +275,9 @@ def save_to_excel(table_data, base_filename="output"):
     """Save the table data to an Excel file, ensuring no unintended header row."""
     cleaned_data = []
     for row in table_data:
-        cleaned_row = [clean_text(cell) for cell in row]
+        cleaned_row = [clean_text(str(cell)) for cell in row]  # Convert all cells to strings after cleaning
         cleaned_data.append(cleaned_row)
 
-    # Debug: Print cleaned data before exporting to Excel
     print("Cleaned Data for Excel:")
     for row in cleaned_data:
         print(row)
@@ -286,10 +285,10 @@ def save_to_excel(table_data, base_filename="output"):
     current_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     filename = f"{base_filename}_{current_time}.xlsx"
     df = pd.DataFrame(cleaned_data)
-    print("DataFrame Head:", df.head())  # Print the first few rows of the DataFrame
+    print("DataFrame Head:", df.head())
 
     try:
-        df.to_excel(filename, index=False, header=False)  # Ensure no header is used
+        df.to_excel(filename, index=False, header=False)
         print(f"Data exported to Excel file {filename}")
     except Exception as e:
         print(f"Error writing to Excel: {e}")
