@@ -97,9 +97,9 @@ def perform_ocr_on_cell(cell_image):
     formatted_text = format_continuous_text(text)
 
     # Debugging: Display the processed cell image and OCR result
-    cv2.imshow('Cell Image', processed_image)
-    cv2.waitKey(0)  # Press any key to continue
-    cv2.destroyAllWindows()
+    #cv2.imshow('Cell Image', processed_image)
+    #cv2.waitKey(0)  # Press any key to continue
+    #cv2.destroyAllWindows()
 
     # Print the extracted text to the console
     print(f"Extracted Text: {formatted_text}")
