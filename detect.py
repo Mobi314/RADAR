@@ -39,10 +39,10 @@ def enhance_lines(image):
     return processed_img
 
 def perform_ocr_on_cell(cell_image):
-    """Perform OCR on the provided cell image using PyTesseract."""
-    enhanced_image = enhance_image_for_ocr(cell_image)  # Assuming this returns a binary image ready for OCR
+    """Apply OCR to the cell image."""
+    enhanced_image = enhance_image_for_ocr(cell_image)
     text = pytesseract.image_to_string(enhanced_image, config='--psm 6')
-    return format_continuous_text(text)  # Cleans up the text
+    return format_continuous_text(text)
 
 def convert_pdf_to_image(pdf_path):
     if not os.path.exists(pdf_path):
@@ -83,9 +83,9 @@ def safe_open_image(path):
 
 def get_valid_bounding_box(contour):
     x, y, w, h = cv2.boundingRect(contour)
-    if w > 0 and h > 0 and (w/h < 15 and h/w < 15):  # Adjust aspect ratio limits to include wider elements
+    if w > 0 and h > 0 and (w/h < 15 and h/w < 15):  # Ensure reasonable dimensions
         return (x, y, w, h)
-    return None
+    return None  # This will prevent malformed tuples
 
 def safe_tuple_access(tpl, default=(0, 0, 0, 0)):
     """Safely access tuple elements, returning a default if not possible."""
@@ -180,8 +180,8 @@ def format_continuous_text(text):
 def extract_table_data(image, detected_cells):
     table_data = []
     for cell in detected_cells:
-        x, y, w, h = safe_tuple_access(cell)
-        if w > 0 and h > 0:
+        x, y, w, h = cell  # Directly use unpacked values assuming all are valid
+        if w > 0 and h > 0:  # Double-check for valid dimensions
             cell_image = image[y:y+h, x:x+w]
             cell_text = perform_ocr_on_cell(cell_image)
             table_data.append(cell_text)
@@ -190,10 +190,10 @@ def extract_table_data(image, detected_cells):
     return table_data
 
 def save_to_excel(table_data, base_filename="output"):
-    """Save the extracted table data to an Excel file."""
+    """Compile extracted data into an Excel file."""
     current_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     filename = f"{base_filename}_{current_time}.xlsx"
-    df = pd.DataFrame([table_data])  # Adjust as needed for row/column format
+    df = pd.DataFrame([table_data])  # Adjust as needed; consider reshaping if necessary
     df.to_excel(filename, index=False)
     print(f"Data exported to Excel file {filename}")
 
@@ -203,15 +203,14 @@ def select_pdf_and_convert():
     pdf_path = filedialog.askopenfilename(filetypes=[("PDF files", "*.pdf")])
     if not pdf_path:
         return
-    image_path = convert_pdf_to_image(pdf_path)
-    detected_cells = process_image_for_table_detection(image_path)
-    sorted_rows = classify_cells(detected_cells)
-    if sorted_rows:
-        table_data = extract_table_data(image_path, sorted_rows)
+    image = convert_pdf_to_image(pdf_path)
+    detected_cells, _ = process_image_for_table_detection(image)
+    if detected_cells:
+        table_data = extract_table_data(image, detected_cells)
         save_to_excel(table_data)
     else:
         print("No tables detected.")
-    cv2.destroyAllWindows()  # Close all OpenCV windows
+    cv2.destroyAllWindows()
 
 def remove_image_file(image_path):
     if image_path:
