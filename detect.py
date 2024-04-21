@@ -82,10 +82,29 @@ def perform_ocr_on_cell(cell_image):
     small_noise_kernel = np.ones((1, 1), np.uint8)
     refined = cv2.erode(eroded, small_noise_kernel, iterations=1)
 
-    # OCR using Pytesseract with advanced configurations for better text segmentation
-    custom_config = r'--oem 3 --psm 6'  # Use LSTM engine and assume a single uniform block of text
-    text = pytesseract.image_to_string(refined, config=custom_config)
+    # Padding: Add a border around the image
+    padded_image = cv2.copyMakeBorder(refined, 10, 10, 10, 10, cv2.BORDER_CONSTANT, value=[255, 255, 255])
+
+    # Detect content type for optimized OCR configuration
+    content_type = detect_content_type(padded_image)
+    if content_type == 'numeric':
+        custom_config = r'--oem 3 --psm 8'  # Optimize for single words (numbers)
+    else:
+        custom_config = r'--oem 3 --psm 6'  # Assume a single uniform block of text
+
+    # OCR using Pytesseract with advanced configurations
+    text = pytesseract.image_to_string(padded_image, config=custom_config)
     return format_continuous_text(text)
+
+def detect_content_type(cell_image):
+    # Example heuristic: more focused on the density of the text
+    non_white_pixels = np.sum(cell_image < 255)
+    total_pixels = cell_image.size
+
+    # If there's a high density of non-white pixels, likely numeric
+    if non_white_pixels / total_pixels > 0.2:
+        return 'numeric'
+    return 'alphanumeric'
 
 def convert_pdf_to_image(pdf_path):
     if not os.path.exists(pdf_path):
