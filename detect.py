@@ -19,24 +19,21 @@ def enhance_image_for_ocr(image):
     return binary
 
 def enhance_lines(image):
-    # Convert to grayscale and apply Gaussian blur
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     blur = cv2.GaussianBlur(gray, (5, 5), 0)
-    # Apply adaptive thresholding to detect lines
     thresh = cv2.adaptiveThreshold(blur, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 11, 2)
 
-    # Define kernels for morphological operation
-    horizontal_kernel_length = max(20, int(image.shape[1] / 30))
-    vertical_kernel_length = max(20, int(image.shape[0] / 30))
+    # Consider using dynamic kernel sizes based on the content of the image
+    horizontal_kernel_length = max(20, int(image.shape[1] / 25))  # Slightly smaller to capture wider columns
+    vertical_kernel_length = max(20, int(image.shape[0] / 25))
+
     horizontal_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (horizontal_kernel_length, 1))
     vertical_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (1, vertical_kernel_length))
 
-    # Apply morphological operations to separate lines horizontally and vertically
     horizontal_lines = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, horizontal_kernel, iterations=2)
     vertical_lines = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, vertical_kernel, iterations=2)
     combined_lines = cv2.addWeighted(horizontal_lines, 0.5, vertical_lines, 0.5, 0.0)
 
-    # Close the structure of the lines to form a solid table grid
     kernel = np.ones((3, 3), np.uint8)
     processed_img = cv2.morphologyEx(combined_lines, cv2.MORPH_CLOSE, kernel, iterations=3)
     return processed_img
@@ -86,7 +83,7 @@ def safe_open_image(path):
 
 def get_valid_bounding_box(contour):
     x, y, w, h = cv2.boundingRect(contour)
-    if w > 0 and h > 0 and (w/h < 10 and h/w < 10):  # Ensure bounding boxes are reasonably proportional
+    if w > 0 and h > 0 and (w/h < 15 and h/w < 15):  # Adjust aspect ratio limits to include wider elements
         return (x, y, w, h)
     return None
 
