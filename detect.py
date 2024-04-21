@@ -36,12 +36,14 @@ def convert_pdf_to_image(pdf_path):
     zoom = 2.5
     mat = fitz.Matrix(zoom, zoom)
     pix = page.get_pixmap(matrix=mat)
-    image_path = "page_0.png"
+    # Create a temporary file for the image
+    temp_img = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
+    image_path = temp_img.name
     pix.save(image_path)
-    doc.close()  # Ensure the document is closed
+    temp_img.close()  # Close the file handle so the image can be read by other functions
+    doc.close()
     return image_path
 
-@contextmanager
 def safe_open_image(path):
     """Context manager for safely opening and closing images."""
     img = Image.open(path)
@@ -137,18 +139,12 @@ def select_pdf_and_convert():
     cv2.destroyAllWindows()  # Close all OpenCV windows
 
 def remove_image_file(image_path):
-    """Remove an image file with retries on permission error."""
-    max_attempts = 5
-    for attempt in range(max_attempts):
-        try:
-            os.remove(image_path)
-            print(f"File {image_path} successfully deleted.")
-            break
-        except PermissionError as e:
-            print(f"Attempt {attempt + 1} failed: {str(e)}")
-            time.sleep(1)  # Wait before retrying
-    else:
-        print(f"Failed to delete the file {image_path} after {max_attempts} attempts.")
+    """Remove an image file with more robust handling."""
+    try:
+        os.remove(image_path)
+        print(f"File {image_path} successfully deleted.")
+    except PermissionError as e:
+        print(f"Error deleting file {image_path}: {str(e)}")
 
 if __name__ == "__main__":
     pdf_path = select_pdf_and_convert()
