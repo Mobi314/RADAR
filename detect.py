@@ -358,5 +358,5 @@ def remove_image_file(image_path):
         print("No valid image path provided for deletion.")
 
 if __name__ == "__main__":
-    #pdf_path = select_pdf_and_convert()
-    test_excel_output()
+    pdf_path = select_pdf_and_convert()
+    #test_excel_output()
