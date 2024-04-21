@@ -182,12 +182,4 @@ def remove_image_file(image_path):
         print("No valid image path provided for deletion.")
 
 if __name__ == "__main__":
-    #pdf_path = select_pdf_and_convert()
-    image_path = convert_pdf_to_image(pdf_path)
-    detected_cells, image = process_image_for_table_detection(image_path)
-    sorted_rows = classify_cells(detected_cells)
-    table_data = extract_table_data(image, sorted_rows)
-    if sorted_rows:
-        table_data = extract_table_data(image_path, sorted_rows)
-        save_to_excel(table_data)
-    remove_image_file(image_path)
+    pdf_path = select_pdf_and_convert()
