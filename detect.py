@@ -68,10 +68,14 @@ def process_image_for_table_detection(image):
     return detected_cells, image
 
 def classify_cells(detected_cells):
-    # Group cells by rows based on y-coordinate proximity
     rows = {}
     for cell in detected_cells:
-        x, y, w, h = cell
+        if len(cell) == 4:
+            x, y, w, h = cell  # This unpacks four elements
+        else:
+            print(f"Detected cell tuple has incorrect format: {cell}")
+            continue  # Skip this iteration to avoid the error
+
         row_found = False
         for key in rows.keys():
             if abs(key - y) < 10:  # 10 is a threshold for grouping cells in the same row
@@ -80,6 +84,12 @@ def classify_cells(detected_cells):
                 break
         if not row_found:
             rows[y] = [(x, y, w, h)]
+
+    sorted_rows = []
+    for y in sorted(rows.keys()):
+        sorted_cells = sorted(rows[y], key=lambda cell: cell[0])
+        sorted_rows.append(sorted_cells)
+    return sorted_rows
 
     # Sort rows and cells within rows
     sorted_rows = []
@@ -91,20 +101,14 @@ def classify_cells(detected_cells):
 def format_continuous_text(text):
     return ' '.join(text.split())
 
-def extract_table_data(image_path, detected_cells):
-    """Extract data from each cell and compile table data."""
-    if not detected_cells:
-        print("No cells detected.")
-        return []
-
-    """Extract data from each cell and compile table data."""
+def extract_table_data(image, detected_cells):
     table_data = []
     for x, y, w, h in detected_cells:
         cell_image = image[y:y+h, x:x+w]
         enhanced_image = enhance_image_for_ocr(cell_image)
         config = '--oem 1 --psm 6'
         cell_text = pytesseract.image_to_string(enhanced_image, config=config)
-        cell_text = ' '.join(cell_text.split())
+        cell_text = ' '.join(cell_text.split())  # Normalize the spacing
         table_data.append(cell_text)
     return table_data
 
@@ -143,8 +147,9 @@ def remove_image_file(image_path):
 if __name__ == "__main__":
     pdf_path = select_pdf_and_convert()
     image_path = convert_pdf_to_image(pdf_path)
-    detected_cells = process_image_for_table_detection(image_path)
+    detected_cells, image = process_image_for_table_detection(image_path)
     sorted_rows = classify_cells(detected_cells)
+    table_data = extract_table_data(image, sorted_rows)
     if sorted_rows:
         table_data = extract_table_data(image_path, sorted_rows)
         save_to_excel(table_data)
