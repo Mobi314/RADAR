@@ -15,21 +15,27 @@ def enhance_image_for_ocr(cell_image):
     # Convert to grayscale
     gray = cv2.cvtColor(cell_image, cv2.COLOR_BGR2GRAY)
     
-    # Applying CLAHE to enhance contrast more adaptively
-    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+    # Applying CLAHE to improve contrast
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
     contrast = clahe.apply(gray)
 
-    # Apply a median filter to reduce noise while preserving edges
-    median_filtered = cv2.medianBlur(contrast, 5)
+    # Denoising
+    denoised = cv2.fastNlMeansDenoising(contrast, None, 10, 7, 21)
 
-    # Thresholding to create a binary image, invert it as most texts are dark
-    _, binary = cv2.threshold(median_filtered, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+    # Sharpening
+    kernel = np.array([[-1,-1,-1], [-1,9,-1], [-1,-1,-1]])
+    sharpened = cv2.filter2D(denoised, -1, kernel)
 
-    # Morphological operations to close small holes and gaps in text
-    kernel = np.ones((2, 2), np.uint8)
-    closing = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel)
+    # Thresholding to get a binary image
+    _, binary = cv2.threshold(sharpened, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
 
-    return closing
+    # Optionally, dilate and erode to clean up small specks and holes
+    dilate_kernel = np.ones((2,2), np.uint8)
+    dilated = cv2.dilate(binary, dilate_kernel, iterations=1)
+    erode_kernel = np.ones((1,1), np.uint8)
+    eroded = cv2.erode(dilated, erode_kernel, iterations=1)
+
+    return eroded
 
 def enhance_lines(image):
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
@@ -51,17 +57,34 @@ def enhance_lines(image):
     processed_img = cv2.morphologyEx(combined_lines, cv2.MORPH_CLOSE, kernel, iterations=3)
     return processed_img
 
-def perform_ocr_on_cell(cell_image, numeric=False):
-    # Enhance the image specifically tailored for OCR
-    enhanced_image = enhance_image_for_ocr(cell_image)
+def perform_ocr_on_cell(cell_image):
+    # Convert to grayscale for more straightforward processing
+    gray = cv2.cvtColor(cell_image, cv2.COLOR_BGR2GRAY)
+    
+    # Apply CLAHE (Contrast Limited Adaptive Histogram Equalization) for better contrast
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+    contrast_enhanced = clahe.apply(gray)
 
-    # Using different PSM modes based on whether we expect numeric or mixed content
-    config = r'--oem 3 --psm 6'  # Assume a single uniform block of text
-    if numeric:
-        config = r'--oem 3 --psm 8 outputbase digits'  # Optimized for numeric extraction
+    # Noise reduction through Gaussian Blur
+    blur = cv2.GaussianBlur(contrast_enhanced, (3, 3), 0)
 
-    # Perform OCR using Pytesseract with the specified configuration
-    text = pytesseract.image_to_string(enhanced_image, config=config)
+    # Apply adaptive thresholding to create a binary image
+    _, binary = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+
+    # Dilate the text to make it more coherent for OCR
+    kernel = np.ones((2, 2), np.uint8)
+    dilated = cv2.dilate(binary, kernel, iterations=1)
+
+    # Additional erosion to thin the text, enhancing separation
+    eroded = cv2.erode(dilated, kernel, iterations=1)
+
+    # Optional: Remove any small noise left with further erosion
+    small_noise_kernel = np.ones((1, 1), np.uint8)
+    refined = cv2.erode(eroded, small_noise_kernel, iterations=1)
+
+    # OCR using Pytesseract with advanced configurations for better text segmentation
+    custom_config = r'--oem 3 --psm 6'  # Use LSTM engine and assume a single uniform block of text
+    text = pytesseract.image_to_string(refined, config=custom_config)
     return format_continuous_text(text)
 
 def convert_pdf_to_image(pdf_path):
@@ -130,12 +153,6 @@ def validate_and_append_cell(contour, detected_cells):
         else:
             print(f"Invalid or incomplete bounding box derived from contour.")
 
-def crop_image_with_padding(cell_image, padding=10):
-    # Check if the image is smaller than the padding size
-    if cell_image.shape[0] <= 2*padding or cell_image.shape[1] <= 2*padding:
-        return cell_image  # Return the original if too small to pad
-    return cell_image[padding:-padding, padding:-padding]
-
 def process_image_for_table_detection(image):
     if image is None or image.size == 0:
         print("Empty or None image passed to process_image_for_table_detection.")
@@ -200,33 +217,30 @@ def classify_cells(detected_cells):
         sorted_rows.append(sorted_cells)
     return sorted_rows
 
-def extract_and_process_cell(image, bounding_box, numeric=False):
-    x, y, w, h = bounding_box
-    # Extract the cell using the bounding box and apply padding
-    cell_image = image[y:y+h, x:x+w]
-    cropped_image = crop_image_with_padding(cell_image)
-    
-    # Perform OCR on the cropped image
-    cell_text = perform_ocr_on_cell(cropped_image, numeric=numeric)
-    return cell_text
-
 def format_continuous_text(text):
     return ' '.join(text.split())
 
 def extract_table_data(image, detected_cells):
+    """Extract data from detected cells and organize by rows and columns."""
     table_data = []
-    padding = 5  # Padding to avoid reading borders
+    # Organize cells into rows based on their vertical alignment
+    rows = {}
+    for (x, y, w, h) in detected_cells:
+        row_key = y // h  # This groups cells into rows by their y-coordinate
+        if row_key in rows:
+            rows[row_key].append((x, y, w, h))
+        else:
+            rows[row_key] = [(x, y, w, h)]
 
-    for cell in detected_cells:
-        x, y, w, h = cell
-        # Apply padding, ensuring we do not exceed image boundaries
-        x_padded, y_padded = max(0, x-padding), max(0, y-padding)
-        w_padded, h_padded = min(image.shape[1] - x_padded, w + 2*padding), min(image.shape[0] - y_padded, h + 2*padding)
-        cell_image = image[y_padded:y_padded+h_padded, x_padded:x_padded+w_padded]
-
-        # Perform OCR on each cell
-        cell_text = perform_ocr_on_cell(cell_image)
-        table_data.append(cell_text)
+    # Sort rows and within each row sort cells by their x-coordinate to maintain left-to-right order
+    sorted_rows = sorted(rows.items(), key=lambda item: item[0])
+    for _, cells in sorted_rows:
+        row_data = []
+        for (x, y, w, h) in sorted(cells, key=lambda cell: cell[0]):
+            cell_image = image[y:y+h, x:x+w]
+            cell_text = perform_ocr_on_cell(cell_image)
+            row_data.append(cell_text)
+        table_data.append(row_data)
 
     return table_data
 
