@@ -79,6 +79,37 @@ def safe_open_image(path):
     finally:
         img.close()
 
+def get_valid_bounding_box(contour):
+    """Calculate and validate the bounding box of a contour."""
+    x, y, w, h = cv2.boundingRect(contour)
+    # You can add any additional validation or transformation here if needed
+    if w > 0 and h > 0:  # Simple validation to ensure width and height are positive
+        return (x, y, w, h)
+    return None  # Return None if the bounding box is not valid
+
+def safe_tuple_access(tpl, default=(0, 0, 0, 0)):
+    """Safely access tuple elements, returning a default if not possible."""
+    try:
+        x, y, w, h = tpl
+        return (x, y, w, h)
+    except ValueError:
+        print(f"Warning: Received malformed tuple {tpl}, using default {default}.")
+        return default
+
+def append_cell_if_valid(contour, detected_cells):
+    bounding_box = get_valid_bounding_box(contour)
+    assert len(bounding_box) == 4, "Bounding box must have exactly four elements"
+    detected_cells.append(bounding_box)
+
+def validate_and_append_cell(contour, detected_cells):
+    if cv2.contourArea(contour) > 100:
+        bounding_box = get_valid_bounding_box(contour)
+        if bounding_box:
+            detected_cells.append(bounding_box)
+            print(f"Appending valid bounding box: {bounding_box}")
+        else:
+            print(f"Invalid or incomplete bounding box derived from contour.")
+
 def process_image_for_table_detection(image):
     if image is None:
         print("Empty or None Image passed to process_image_for_table_detection.")
@@ -93,8 +124,11 @@ def process_image_for_table_detection(image):
 
     for contour in contours:
         if cv2.contourArea(contour) > 100:
-            x, y, w, h = cv2.boundingRect(contour)
-            detected_cells.append((x, y, w, h))
+            bounding_box = get_valid_bounding_box(contour)
+            if bounding_box:  # Ensure only valid bounding boxes are added
+                detected_cells.append(bounding_box)
+            else:
+                print(f"Invalid bounding box for contour with area {cv2.contourArea(contour)}")
 
     if not detected_cells:
         print("No tables detected.")
@@ -138,13 +172,14 @@ def format_continuous_text(text):
 
 def extract_table_data(image, detected_cells):
     table_data = []
-    for x, y, w, h in detected_cells:
-        cell_image = image[y:y+h, x:x+w]
-        enhanced_image = enhance_image_for_ocr(cell_image)
-        config = '--oem 1 --psm 6'
-        cell_text = pytesseract.image_to_string(enhanced_image, config=config)
-        cell_text = ' '.join(cell_text.split())  # Normalize the spacing
-        table_data.append(cell_text)
+    for cell in detected_cells:
+        x, y, w, h = safe_tuple_access(cell)
+        if w > 0 and h > 0:
+            cell_image = image[y:y+h, x:x+w]
+            cell_text = perform_ocr_on_cell(cell_image)
+            table_data.append(cell_text)
+        else:
+            print(f"Skipped OCR on invalid cell with dimensions: {w}x{h}")
     return table_data
 
 def save_to_excel(table_data, base_filename="output"):
