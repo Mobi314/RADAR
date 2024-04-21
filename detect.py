@@ -72,7 +72,6 @@ def enhance_lines(image):
     return processed_img
 
 def perform_ocr_on_cell(cell_image):
-    # Prepare the image
     processed_image = enhance_image_for_ocr(cell_image)
 
     # Determine content type to choose optimal OCR settings
@@ -84,7 +83,17 @@ def perform_ocr_on_cell(cell_image):
 
     # OCR processing
     text = pytesseract.image_to_string(processed_image, config=custom_config)
-    return format_continuous_text(text)
+    formatted_text = format_continuous_text(text)
+
+    # Display the processed cell image and the OCR result
+    cv2.imshow('Cell Image', processed_image)
+    cv2.waitKey(0)  # Wait for a key press to continue to the next cell
+    cv2.destroyAllWindows()
+
+    # Print the extracted text to the console
+    print(f"Extracted Text: {formatted_text}")
+
+    return formatted_text
 
 def detect_content_type(image):
     # A simple approach based on the ratio of white to black pixels
