@@ -19,25 +19,24 @@ def enhance_image_for_ocr(image):
     return binary
 
 def enhance_lines(image):
-    if image is None or image.size == 0:
-        print("Empty or None image passed to enhance_lines.")
-        return None
+    # Convert to grayscale and apply Gaussian blur
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    blur = cv2.GaussianBlur(gray, (5, 5), 0)
+    # Apply adaptive thresholding to detect lines
+    thresh = cv2.adaptiveThreshold(blur, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 11, 2)
 
-    try:
-        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        blur = cv2.GaussianBlur(gray, (5, 5), 0)
-        thresh = cv2.adaptiveThreshold(blur, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 11, 2)
-    except cv2.error as e:
-        print(f"Error in cv2 operations: {e}")
-        return None
-
+    # Define kernels for morphological operation
     horizontal_kernel_length = max(20, int(image.shape[1] / 30))
     vertical_kernel_length = max(20, int(image.shape[0] / 30))
     horizontal_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (horizontal_kernel_length, 1))
     vertical_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (1, vertical_kernel_length))
+
+    # Apply morphological operations to separate lines horizontally and vertically
     horizontal_lines = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, horizontal_kernel, iterations=2)
     vertical_lines = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, vertical_kernel, iterations=2)
     combined_lines = cv2.addWeighted(horizontal_lines, 0.5, vertical_lines, 0.5, 0.0)
+
+    # Close the structure of the lines to form a solid table grid
     kernel = np.ones((3, 3), np.uint8)
     processed_img = cv2.morphologyEx(combined_lines, cv2.MORPH_CLOSE, kernel, iterations=3)
     return processed_img
@@ -86,12 +85,10 @@ def safe_open_image(path):
         img.close()
 
 def get_valid_bounding_box(contour):
-    """Calculate and validate the bounding box of a contour."""
     x, y, w, h = cv2.boundingRect(contour)
-    # You can add any additional validation or transformation here if needed
-    if w > 0 and h > 0:  # Simple validation to ensure width and height are positive
+    if w > 0 and h > 0 and (w/h < 10 and h/w < 10):  # Ensure bounding boxes are reasonably proportional
         return (x, y, w, h)
-    return None  # Return None if the bounding box is not valid
+    return None
 
 def safe_tuple_access(tpl, default=(0, 0, 0, 0)):
     """Safely access tuple elements, returning a default if not possible."""
@@ -117,32 +114,43 @@ def validate_and_append_cell(contour, detected_cells):
             print(f"Invalid or incomplete bounding box derived from contour.")
 
 def process_image_for_table_detection(image):
-    processed_img = enhance_lines(image)
-    if processed_img is None:
-        print("Empty or None Image passed to process_image_for_table_detection.")
+    if image is None or image.size == 0:
+        print("Empty or None image passed to process_image_for_table_detection.")
         return [], None
 
-    # Changing the retrieval mode to capture all contours and organize them into a hierarchy
+    # Apply line enhancement
+    processed_img = enhance_lines(image)
+    if processed_img is None:
+        print("Failed to enhance image lines.")
+        return [], None
+
+    # Retrieve contours with hierarchy information
     contours, hierarchy = cv2.findContours(processed_img, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_SIMPLE)
     detected_cells = []
 
+    # Check for valid hierarchy to process contours
     if hierarchy is not None:
         hierarchy = hierarchy[0]  # Get the actual hierarchy array
         for i, contour in enumerate(contours):
             # Filter to include only child contours (assuming cells are children of table contours)
-            if hierarchy[i][3] != -1:  # Has parent, thus it's a cell not the outer table
-                x, y, w, h = cv2.boundingRect(contour)
-                if w > 0 and h > 0:
-                    detected_cells.append((x, y, w, h))
+            if hierarchy[i][3] != -1:  # Has a parent contour
+                bounding_box = get_valid_bounding_box(contour)
+                if bounding_box:
+                    detected_cells.append(bounding_box)
+                    # Optionally draw each bounding box on the image for visualization
+                    x, y, w, h = bounding_box
                     cv2.rectangle(image, (x, y), (x + w, y + h), (0, 255, 0), 2)
+                else:
+                    print(f"Invalid bounding box for contour with area {cv2.contourArea(contour)}")
 
-    if not detected_cells:
+    # Display the processed image with detected cells for verification
+    if detected_cells:
+        print(f"Detected {len(detected_cells)} cells.")
+        cv2.imshow("Detected Cells", image)
+        cv2.waitKey(0)  # Wait for a key press to close the display window
+        cv2.destroyAllWindows()
+    else:
         print("No tables detected.")
-        return [], image
-
-    cv2.imshow("Detected Cells", image)
-    cv2.waitKey(0)  # Wait for a key press to close
-    cv2.destroyAllWindows()
 
     return detected_cells, image
 
