@@ -11,32 +11,45 @@ import os
 import tempfile
 import io
 import string
+import re
 
 def enhance_image_for_ocr(cell_image):
     # Convert to grayscale
     gray = cv2.cvtColor(cell_image, cv2.COLOR_BGR2GRAY)
     
-    # Applying CLAHE to improve contrast
+    # Dynamic CLAHE
     clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
     contrast = clahe.apply(gray)
 
-    # Denoising
-    denoised = cv2.fastNlMeansDenoising(contrast, None, 10, 7, 21)
+    # Adaptive Thresholding with dynamic parameter tuning
+    thresh_val = threshold_otsu(contrast)  # Using Otsu's method to dynamically determine the threshold value
+    _, binary = cv2.threshold(contrast, thresh_val, 255, cv2.THRESH_BINARY)
 
-    # Sharpening
-    kernel = np.array([[-1,-1,-1], [-1,9,-1], [-1,-1,-1]])
-    sharpened = cv2.filter2D(denoised, -1, kernel)
+    return binary
 
-    # Thresholding to get a binary image
-    _, binary = cv2.threshold(sharpened, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-
-    # Optionally, dilate and erode to clean up small specks and holes
-    dilate_kernel = np.ones((2,2), np.uint8)
-    dilated = cv2.dilate(binary, dilate_kernel, iterations=1)
-    erode_kernel = np.ones((1,1), np.uint8)
-    eroded = cv2.erode(dilated, erode_kernel, iterations=1)
-
-    return eroded
+def threshold_otsu(image):
+    # Calculate histogram
+    hist = cv2.calcHist([image], [0], None, [256], [0,256])
+    total = image.size
+    sumB = 0
+    wB = 0
+    maximum = 0.0
+    sum1 = np.sum([i * hist[i] for i in range(256)])
+    for i in range(256):
+        wB += hist[i]
+        if wB == 0:
+            continue
+        wF = total - wB
+        if wF == 0:
+            break
+        sumB += i * hist[i]
+        mB = sumB / wB
+        mF = (sum1 - sumB) / wF
+        between = wB * wF * ((mB - mF) ** 2)
+        if between > maximum:
+            maximum = between
+            level = i
+    return level
 
 def enhance_lines(image):
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
@@ -59,51 +72,25 @@ def enhance_lines(image):
     return processed_img
 
 def perform_ocr_on_cell(cell_image):
-    # Convert to grayscale for more straightforward processing
-    gray = cv2.cvtColor(cell_image, cv2.COLOR_BGR2GRAY)
-    
-    # Apply CLAHE (Contrast Limited Adaptive Histogram Equalization) for better contrast
-    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
-    contrast_enhanced = clahe.apply(gray)
+    # Prepare the image
+    processed_image = enhance_image_for_ocr(cell_image)
 
-    # Noise reduction through Gaussian Blur
-    blur = cv2.GaussianBlur(contrast_enhanced, (3, 3), 0)
-
-    # Apply adaptive thresholding to create a binary image
-    _, binary = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
-
-    # Dilate the text to make it more coherent for OCR
-    kernel = np.ones((2, 2), np.uint8)
-    dilated = cv2.dilate(binary, kernel, iterations=1)
-
-    # Additional erosion to thin the text, enhancing separation
-    eroded = cv2.erode(dilated, kernel, iterations=1)
-
-    # Optional: Remove any small noise left with further erosion
-    small_noise_kernel = np.ones((1, 1), np.uint8)
-    refined = cv2.erode(eroded, small_noise_kernel, iterations=1)
-
-    # Padding: Add a border around the image
-    padded_image = cv2.copyMakeBorder(refined, 10, 10, 10, 10, cv2.BORDER_CONSTANT, value=[255, 255, 255])
-
-    # Detect content type for optimized OCR configuration
-    content_type = detect_content_type(padded_image)
+    # Determine content type to choose optimal OCR settings
+    content_type = detect_content_type(processed_image)
     if content_type == 'numeric':
-        custom_config = r'--oem 3 --psm 8'  # Optimize for single words (numbers)
+        custom_config = r'--oem 3 --psm 8'  # Optimize for numeric
     else:
-        custom_config = r'--oem 3 --psm 6'  # Assume a single uniform block of text
+        custom_config = r'--oem 3 --psm 6'  # General text
 
-    # OCR using Pytesseract with advanced configurations
-    text = pytesseract.image_to_string(padded_image, config=custom_config)
+    # OCR processing
+    text = pytesseract.image_to_string(processed_image, config=custom_config)
     return format_continuous_text(text)
 
-def detect_content_type(cell_image):
-    # Example heuristic: more focused on the density of the text
-    non_white_pixels = np.sum(cell_image < 255)
-    total_pixels = cell_image.size
-
-    # If there's a high density of non-white pixels, likely numeric
-    if non_white_pixels / total_pixels > 0.2:
+def detect_content_type(image):
+    # A simple approach based on the ratio of white to black pixels
+    whites = np.sum(image == 255)
+    blacks = np.sum(image == 0)
+    if blacks / float(whites + blacks) > 0.5:  # More dense text regions might indicate numeric content
         return 'numeric'
     return 'alphanumeric'
 
@@ -238,7 +225,23 @@ def classify_cells(detected_cells):
     return sorted_rows
 
 def format_continuous_text(text):
-    return ' '.join(text.split())
+    # Normalize newlines, replace carriage returns with newline characters
+    text = text.replace('\r', '\n')
+    # Compact multiple newline characters into a single newline
+    text = re.sub(r'\n+', '\n', text)
+    
+    # Correct common OCR misreads
+    text = re.sub(r'\bIl\b', '11', text)  # Correct 'Il' to '11'
+    text = re.sub(r'\bO\b', '0', text)    # Correct 'O' to '0' when isolated
+    text = re.sub(r'(?<!\d)0(?!\d)', 'O', text)  # Correct '0' to 'O' when not surrounded by other digits
+
+    # Remove non-printable characters except newlines
+    text = ''.join(char for char in text if char in string.printable or char == '\n')
+    
+    # Trim whitespace around the text and between lines
+    text = '\n'.join(line.strip() for line in text.split('\n'))
+
+    return text
 
 def extract_table_data(image, detected_cells):
     """Extract data from detected cells and organize by rows and columns."""
