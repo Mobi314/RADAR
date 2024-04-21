@@ -39,9 +39,20 @@ def enhance_lines(image):
     return processed_img
 
 def perform_ocr_on_cell(cell_image):
-    """Apply OCR to the cell image."""
-    enhanced_image = enhance_image_for_ocr(cell_image)
-    text = pytesseract.image_to_string(enhanced_image, config='--psm 6')
+    """Apply OCR to the cell image with enhanced preprocessing."""
+    # Convert to grayscale and enhance contrast
+    gray = cv2.cvtColor(cell_image, cv2.COLOR_BGR2GRAY)
+    enhanced = cv2.equalizeHist(gray)  # Equalize the histogram to improve contrast
+
+    # Apply Gaussian blur to reduce noise
+    blur = cv2.GaussianBlur(enhanced, (3, 3), 0)
+
+    # Apply binary threshold
+    _, binary = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    
+    # OCR using Pytesseract
+    custom_config = r'--oem 3 --psm 6'
+    text = pytesseract.image_to_string(binary, config=custom_config)
     return format_continuous_text(text)
 
 def convert_pdf_to_image(pdf_path):
@@ -178,22 +189,34 @@ def format_continuous_text(text):
     return ' '.join(text.split())
 
 def extract_table_data(image, detected_cells):
+    """Extract data from detected cells and organize by rows and columns."""
     table_data = []
-    for cell in detected_cells:
-        x, y, w, h = cell  # Directly use unpacked values assuming all are valid
-        if w > 0 and h > 0:  # Double-check for valid dimensions
+    # Organize cells into rows based on their vertical alignment
+    rows = {}
+    for (x, y, w, h) in detected_cells:
+        row_key = y // h  # This groups cells into rows by their y-coordinate
+        if row_key in rows:
+            rows[row_key].append((x, y, w, h))
+        else:
+            rows[row_key] = [(x, y, w, h)]
+
+    # Sort rows and within each row sort cells by their x-coordinate to maintain left-to-right order
+    sorted_rows = sorted(rows.items(), key=lambda item: item[0])
+    for _, cells in sorted_rows:
+        row_data = []
+        for (x, y, w, h) in sorted(cells, key=lambda cell: cell[0]):
             cell_image = image[y:y+h, x:x+w]
             cell_text = perform_ocr_on_cell(cell_image)
-            table_data.append(cell_text)
-        else:
-            print(f"Skipped OCR on invalid cell with dimensions: {w}x{h}")
+            row_data.append(cell_text)
+        table_data.append(row_data)
+
     return table_data
 
 def save_to_excel(table_data, base_filename="output"):
-    """Compile extracted data into an Excel file."""
+    """Save the table data to an Excel file, with each sublist as a row."""
     current_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     filename = f"{base_filename}_{current_time}.xlsx"
-    df = pd.DataFrame([table_data])  # Adjust as needed; consider reshaping if necessary
+    df = pd.DataFrame(table_data)  # Each sublist in table_data is a row in Excel
     df.to_excel(filename, index=False)
     print(f"Data exported to Excel file {filename}")
 
