@@ -45,9 +45,16 @@ def process_image_for_table_detection(image_path):
     image = cv2.imread(image_path)
     processed_img = enhance_lines(image)
     contours, hierarchy = cv2.findContours(processed_img, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    detected_cells = [cv2.boundingRect(contour) for contour in contours if cv2.contourArea(contour) > 100]
-    for x, y, w, h in detected_cells:
-        cv2.rectangle(image, (x, y), (x + w, y + h), (0, 255, 0), 1)
+    detected_cells = []
+
+    # Ensure we have contours to work with
+    if contours:
+        for contour in contours:
+            if cv2.contourArea(contour) > 100:  # Filter small contours that may not be cells
+                x, y, w, h = cv2.boundingRect(contour)
+                cv2.rectangle(image, (x, y), (x + w, y + h), (0, 255, 0), 1)
+                detected_cells.append((x, y, w, h))
+
     cv2.imshow("Detected Cells", image)
     cv2.waitKey(1)  # Short delay to display the image
     cv2.destroyAllWindows()  # Close the window after display
@@ -79,6 +86,10 @@ def format_continuous_text(text):
 
 def extract_table_data(image_path, detected_cells):
     """Extract data from each cell and compile table data."""
+    if not detected_cells:
+        print("No cells detected.")
+        return []
+
     image = Image.open(image_path)
     table_data = []
     for x, y, w, h in detected_cells:
@@ -89,6 +100,7 @@ def extract_table_data(image_path, detected_cells):
         cell_text = pytesseract.image_to_string(enhanced_image, config=config)
         cell_text = ' '.join(cell_text.split())  # Remove unnecessary whitespace
         table_data.append(cell_text)
+
     return table_data
 
 def save_to_excel(table_data, base_filename="output"):
