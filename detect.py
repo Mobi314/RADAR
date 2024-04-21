@@ -117,13 +117,10 @@ def validate_and_append_cell(contour, detected_cells):
             print(f"Invalid or incomplete bounding box derived from contour.")
 
 def process_image_for_table_detection(image):
-    if image is None:
-        print("Empty or None Image passed to process_image_for_table_detection.")
-        return [], None
-
     processed_img = enhance_lines(image)
     if processed_img is None:
-        return [], image
+        print("Empty or None Image passed to process_image_for_table_detection.")
+        return [], None
 
     contours, _ = cv2.findContours(processed_img, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     detected_cells = []
@@ -135,14 +132,12 @@ def process_image_for_table_detection(image):
             bounding_box = get_valid_bounding_box(contour)
             if bounding_box:  # Ensure only valid bounding boxes are added
                 detected_cells.append(bounding_box)
-                # Draw each bounding box on the image
-                x, y, w, h = bounding_box
-                cv2.rectangle(image_with_cells, (x, y), (x + w, y + h), (0, 255, 0), 2)
+                # Here we use the safe tuple access
+                x, y, w, h = safe_tuple_access(bounding_box)
+                if w > 0 and h > 0:
+                    cv2.rectangle(image_with_cells, (x, y), (x + w, y + h), (0, 255, 0), 2)
             else:
                 print(f"Invalid bounding box for contour with area {cv2.contourArea(contour)}")
-        else:
-            # Optionally draw contours that were considered but not used
-            cv2.drawContours(image_with_cells, [contour], -1, (0, 0, 255), 1)
 
     if not detected_cells:
         print("No tables detected.")
