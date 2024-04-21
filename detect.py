@@ -18,9 +18,18 @@ def enhance_image_for_ocr(image):
     return binary
 
 def enhance_lines(image):
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    blur = cv2.GaussianBlur(gray, (5, 5), 0)
-    thresh = cv2.adaptiveThreshold(blur, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 11, 2)
+    if image is None or image.size == 0:
+        print("Empty or None image passed to enhance_lines.")
+        return None
+
+    try:
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        blur = cv2.GaussianBlur(gray, (5, 5), 0)
+        thresh = cv2.adaptiveThreshold(blur, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 11, 2)
+    except cv2.error as e:
+        print(f"Error in cv2 operations: {e}")
+        return None
+
     horizontal_kernel_length = max(20, int(image.shape[1] / 30))
     vertical_kernel_length = max(20, int(image.shape[0] / 30))
     horizontal_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (horizontal_kernel_length, 1))
@@ -34,13 +43,13 @@ def enhance_lines(image):
 
 def convert_pdf_to_image(pdf_path):
     doc = fitz.open(pdf_path)
-    if not doc.page_count:  # Check if the document contains any pages
+    if doc.page_count == 0:
         print("No pages found in document.")
         doc.close()
         return None
 
     try:
-        page = doc.load_page(0)  # Attempt to load the first page
+        page = doc.load_page(0)  # load the first page
     except IndexError:
         print("Page index out of range.")
         doc.close()
@@ -49,9 +58,12 @@ def convert_pdf_to_image(pdf_path):
     zoom = 2.5
     mat = fitz.Matrix(zoom, zoom)
     pix = page.get_pixmap(matrix=mat)
-    img = np.array(Image.open(io.BytesIO(pix.tobytes("png"))))  # Convert to an array directly
-
+    img = np.array(Image.open(io.BytesIO(pix.tobytes("png"))))
     doc.close()
+
+    if img.size == 0:
+        print("Image loading failed, empty image array.")
+        return None
     return img
 
 def safe_open_image(path):
