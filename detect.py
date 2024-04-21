@@ -1,11 +1,12 @@
 import cv2
 import numpy as np
 import pytesseract
-from PIL import Image
+from PIL import Image, ImageEnhance
 import fitz  # PyMuPDF
 import tkinter as tk
 from tkinter import filedialog
 import pandas as pd
+from datetime import datetime
 
 def enhance_lines(image):
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
@@ -38,9 +39,12 @@ def process_image_for_table_detection(image_path):
     contours, hierarchy = cv2.findContours(processed_img, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_SIMPLE)
     detected_cells = []
     for i, contour in enumerate(contours):
-        if hierarchy[0][i][3] != -1:
+        if hierarchy[0][i][3] != -1:  # Parent contour
             x, y, w, h = cv2.boundingRect(contour)
+            cv2.rectangle(image, (x, y), (x + w, y + h), (0, 255, 0), 1)
             detected_cells.append((x, y, w, h))
+    cv2.imshow("Detected Cells", image)
+    cv2.waitKey(1)  # Short delay to allow the image to be displayed
     return detected_cells
 
 def classify_cells(detected_cells):
@@ -70,24 +74,32 @@ def format_continuous_text(text):
 def extract_table_data(image_path, sorted_rows):
     image = Image.open(image_path)
     table_data = []
-    for row in sorted_rows:
+    for row in sorted rows:
         row_data = []
         for x, y, w, h in row:
             cell_image = image.crop((x, y, x + w, y + h))
+            # Convert to grayscale and enhance contrast
+            gray = cell_image.convert('L')
+            enhancer = ImageEnhance.Contrast(gray)
+            enhanced_image = enhancer.enhance(2.0)  # Increase the contrast to make text more distinguishable
+            # Optionally convert to a binary image for sharper text
+            threshold = enhanced_image.point(lambda p: p > 128 and 255)
             config = '--oem 1 --psm 6'
-            cell_text = pytesseract.image_to_string(cell_image, config=config)
+            cell_text = pytesseract.image_to_string(threshold, config=config)
             cell_text = format_continuous_text(cell_text)
             row_data.append(cell_text)
         table_data.append(row_data)
     return table_data
 
-def save_to_excel(table_data, output_file="output.xlsx"):
+def save_to_excel(table_data, base_filename="output"):
+    current_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    filename = f"{base_filename}_{current_time}.xlsx"
     df = pd.DataFrame(table_data)
     if len(df.columns) > 0:  # Optionally set the first row as header if it's indeed headers
         df.columns = df.iloc[0]
         df = df[1:]
-    df.to_excel(output_file, index=False)
-    print(f"Data exported to Excel file {output_file}")
+    df.to_excel(filename, index=False)
+    print(f"Data exported to Excel file {filename}")
 
 def select_pdf_and_convert():
     root = tk.Tk()
@@ -103,6 +115,7 @@ def select_pdf_and_convert():
         save_to_excel(table_data)
     else:
         print("No tables detected.")
+    cv2.destroyAllWindows()  # Close all OpenCV windows
 
 if __name__ == "__main__":
     select_pdf_and_convert()
