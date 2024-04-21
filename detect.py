@@ -74,7 +74,7 @@ def format_continuous_text(text):
 def extract_table_data(image_path, sorted_rows):
     image = Image.open(image_path)
     table_data = []
-    for row in sorted rows:
+    for row in sorted_rows:
         row_data = []
         for x, y, w, h in row:
             cell_image = image.crop((x, y, x + w, y + h))
