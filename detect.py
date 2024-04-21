@@ -15,25 +15,21 @@ def enhance_image_for_ocr(cell_image):
     # Convert to grayscale
     gray = cv2.cvtColor(cell_image, cv2.COLOR_BGR2GRAY)
     
-    # Applying CLAHE to improve contrast, higher clip limit to adjust more contrast
-    clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8,8))
+    # Applying CLAHE to enhance contrast more adaptively
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
     contrast = clahe.apply(gray)
 
-    # Denoising using Non-Local Means Denoising for preserving edges better
-    denoised = cv2.fastNlMeansDenoising(contrast, h=10, templateWindowSize=7, searchWindowSize=21)
+    # Apply a median filter to reduce noise while preserving edges
+    median_filtered = cv2.medianBlur(contrast, 5)
 
-    # Sharpening using a more targeted kernel
-    kernel = np.array([[0, -1, 0], [-1, 5,-1], [0, -1, 0]])
-    sharpened = cv2.filter2D(denoised, -1, kernel)
+    # Thresholding to create a binary image, invert it as most texts are dark
+    _, binary = cv2.threshold(median_filtered, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
 
-    # Thresholding to get a binary image, using Otsu's method to automate threshold choice
-    _, binary = cv2.threshold(sharpened, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    # Morphological operations to close small holes and gaps in text
+    kernel = np.ones((2, 2), np.uint8)
+    closing = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel)
 
-    # Applying morphological operations to remove small noise
-    morph_kernel = np.ones((1,1), np.uint8)
-    opened = cv2.morphologyEx(binary, cv2.MORPH_OPEN, morph_kernel)
-
-    return opened
+    return closing
 
 def enhance_lines(image):
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
@@ -56,16 +52,15 @@ def enhance_lines(image):
     return processed_img
 
 def perform_ocr_on_cell(cell_image, numeric=False):
+    # Enhance the image specifically tailored for OCR
     enhanced_image = enhance_image_for_ocr(cell_image)
 
-    # Tesseract configuration for different scenarios
+    # Using different PSM modes based on whether we expect numeric or mixed content
+    config = r'--oem 3 --psm 6'  # Assume a single uniform block of text
     if numeric:
-        # Optimized for numeric extraction
-        config = r'--oem 3 --psm 8 outputbase digits'
-    else:
-        # General alphanumeric configuration
-        config = r'--oem 3 --psm 6'
+        config = r'--oem 3 --psm 8 outputbase digits'  # Optimized for numeric extraction
 
+    # Perform OCR using Pytesseract with the specified configuration
     text = pytesseract.image_to_string(enhanced_image, config=config)
     return format_continuous_text(text)
 
@@ -219,26 +214,19 @@ def format_continuous_text(text):
     return ' '.join(text.split())
 
 def extract_table_data(image, detected_cells):
-    """Extract data from detected cells and organize by rows and columns."""
     table_data = []
-    # Organize cells into rows based on their vertical alignment
-    rows = {}
-    for (x, y, w, h) in detected_cells:
-        row_key = y // h  # This groups cells into rows by their y-coordinate
-        if row_key in rows:
-            rows[row_key].append((x, y, w, h))
-        else:
-            rows[row_key] = [(x, y, w, h)]
+    padding = 5  # Padding to avoid reading borders
 
-    # Sort rows and within each row sort cells by their x-coordinate to maintain left-to-right order
-    sorted_rows = sorted(rows.items(), key=lambda item: item[0])
-    for _, cells in sorted_rows:
-        row_data = []
-        for (x, y, w, h) in sorted(cells, key=lambda cell: cell[0]):
-            cell_image = image[y:y+h, x:x+w]
-            cell_text = perform_ocr_on_cell(cell_image)
-            row_data.append(cell_text)
-        table_data.append(row_data)
+    for cell in detected_cells:
+        x, y, w, h = cell
+        # Apply padding, ensuring we do not exceed image boundaries
+        x_padded, y_padded = max(0, x-padding), max(0, y-padding)
+        w_padded, h_padded = min(image.shape[1] - x_padded, w + 2*padding), min(image.shape[0] - y_padded, h + 2*padding)
+        cell_image = image[y_padded:y_padded+h_padded, x_padded:x_padded+w_padded]
+
+        # Perform OCR on each cell
+        cell_text = perform_ocr_on_cell(cell_image)
+        table_data.append(cell_text)
 
     return table_data
 
