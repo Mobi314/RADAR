@@ -18,27 +18,29 @@ def enhance_image_for_ocr(image):
     _, binary = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
     return binary
 
-def enhance_lines(image):
-    # Convert to grayscale
+def enhance_lines(image, horiz_size_ratio=30, vert_size_ratio=30):
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    # Apply a combination of Gaussian Blur and adaptive threshold
     blur = cv2.GaussianBlur(gray, (7, 7), 0)
-    thresh = cv2.adaptiveThreshold(blur, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-                                   cv2.THRESH_BINARY_INV, 11, 2)
+    thresh = cv2.adaptiveThreshold(blur, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 11, 2)
 
-    # Modify kernel size based on expected cell size, these values might need tuning
-    horizontal_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (15, 1))
-    vertical_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (1, 15))
+    # Adjust kernel sizes based on image dimensions and provided ratios
+    horizontal_kernel_length = max(20, int(image.shape[1] / horiz_size_ratio))
+    vertical_kernel_length = max(20, int(image.shape[0] / vert_size_ratio))
+
+    horizontal_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (horizontal_kernel_length, 1))
+    vertical_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (1, vertical_kernel_length))
 
     horizontal_lines = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, horizontal_kernel, iterations=2)
     vertical_lines = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, vertical_kernel, iterations=2)
-
-    # Combine the horizontal and vertical lines
     combined_lines = cv2.addWeighted(horizontal_lines, 0.5, vertical_lines, 0.5, 0.0)
-    # Additional morphological closing can help close gaps in lines
-    kernel = np.ones((3, 3), np.uint8)
-    processed_img = cv2.morphologyEx(combined_lines, cv2.MORPH_CLOSE, kernel, iterations=3)
-    return processed_img
+
+    cv2.imshow("Horizontal Lines", horizontal_lines)
+    cv2.imshow("Vertical Lines", vertical_lines)
+    cv2.imshow("Combined Lines", combined_lines)
+    cv2.waitKey(0)  # Press any key to proceed
+    cv2.destroyAllWindows()
+
+    return combined_lines
 
 def perform_ocr_on_cell(cell_image):
     """Perform OCR on the provided cell image using PyTesseract."""
