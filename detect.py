@@ -10,6 +10,7 @@ from datetime import datetime
 import os
 import tempfile
 import io
+import string
 
 def enhance_image_for_ocr(cell_image):
     # Convert to grayscale
