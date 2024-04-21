@@ -21,11 +21,22 @@ def enhance_image_for_ocr(cell_image):
     clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
     contrast = clahe.apply(gray)
 
-    # Adaptive Thresholding with dynamic parameter tuning
-    thresh_val = threshold_otsu(contrast)  # Using Otsu's method to dynamically determine the threshold value
-    _, binary = cv2.threshold(contrast, thresh_val, 255, cv2.THRESH_BINARY)
+    # Evaluate the text characteristics to decide on thresholding method
+    if is_text_thin(contrast):
+        # Use a more sensitive threshold for thin text
+        _, binary = cv2.threshold(contrast, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+    else:
+        # Use regular thresholding for bold text
+        thresh_val = threshold_otsu(contrast)  # Otsu's method dynamically determines the threshold value
+        _, binary = cv2.threshold(contrast, thresh_val, 255, cv2.THRESH_BINARY)
 
     return binary
+
+def is_text_thin(image):
+    # Estimate text thickness based on the distribution of pixel values
+    whites = np.sum(image > 128)
+    blacks = np.sum(image <= 128)
+    return whites / float(whites + blacks) > 0.5
 
 def threshold_otsu(image):
     # Calculate histogram
@@ -74,20 +85,20 @@ def enhance_lines(image):
 def perform_ocr_on_cell(cell_image):
     processed_image = enhance_image_for_ocr(cell_image)
 
-    # Determine content type to choose optimal OCR settings
-    content_type = detect_content_type(processed_image)
-    if content_type == 'numeric':
-        custom_config = r'--oem 3 --psm 8'  # Optimize for numeric
+    # Estimate text density for dynamic OCR settings
+    text_density = estimate_text_density(processed_image)
+    if text_density < 0.1:  # This threshold might need tuning
+        custom_config = r'--oem 3 --psm 8'  # Single word, good for sparse text
     else:
-        custom_config = r'--oem 3 --psm 6'  # General text
+        custom_config = r'--oem 3 --psm 6'  # General text, more suitable for denser text
 
     # OCR processing
     text = pytesseract.image_to_string(processed_image, config=custom_config)
     formatted_text = format_continuous_text(text)
 
-    # Display the processed cell image and the OCR result
+    # Debugging: Display the processed cell image and OCR result
     cv2.imshow('Cell Image', processed_image)
-    cv2.waitKey(0)  # Wait for a key press to continue to the next cell
+    cv2.waitKey(0)  # Press any key to continue
     cv2.destroyAllWindows()
 
     # Print the extracted text to the console
@@ -95,6 +106,12 @@ def perform_ocr_on_cell(cell_image):
 
     return formatted_text
 
+def estimate_text_density(image):
+    non_white_pixels = np.sum(image < 255)
+    total_pixels = image.size
+    return non_white_pixels / total_pixels
+
+"""
 def detect_content_type(image):
     # A simple approach based on the ratio of white to black pixels
     whites = np.sum(image == 255)
@@ -102,7 +119,7 @@ def detect_content_type(image):
     if blacks / float(whites + blacks) > 0.5:  # More dense text regions might indicate numeric content
         return 'numeric'
     return 'alphanumeric'
-
+"""
 def convert_pdf_to_image(pdf_path):
     if not os.path.exists(pdf_path):
         print("PDF file does not exist.")
