@@ -12,25 +12,28 @@ import tempfile
 import io
 
 def enhance_image_for_ocr(cell_image):
-    # Convert to grayscale for more consistent processing
+    # Convert to grayscale
     gray = cv2.cvtColor(cell_image, cv2.COLOR_BGR2GRAY)
     
-    # Applying a more dynamic CLAHE for better contrast adjustment
-    clahe = cv2.createCLAHE(clipLimit=4.0, tileGridSize=(8, 8))
-    contrast_enhanced = clahe.apply(gray)
+    # Applying CLAHE to improve contrast, higher clip limit to adjust more contrast
+    clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8,8))
+    contrast = clahe.apply(gray)
 
-    # Use a bilateral filter for edge-preserving noise reduction
-    smoothed = cv2.bilateralFilter(contrast_enhanced, d=9, sigmaColor=75, sigmaSpace=75)
+    # Denoising using Non-Local Means Denoising for preserving edges better
+    denoised = cv2.fastNlMeansDenoising(contrast, h=10, templateWindowSize=7, searchWindowSize=21)
 
-    # Adaptive thresholding to create a binary image with better foreground-background separation
-    binary = cv2.adaptiveThreshold(smoothed, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
+    # Sharpening using a more targeted kernel
+    kernel = np.array([[0, -1, 0], [-1, 5,-1], [0, -1, 0]])
+    sharpened = cv2.filter2D(denoised, -1, kernel)
 
-    # Dilate to close gaps in text, followed by erosion to thin the text slightly
-    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (1, 1))
-    dilated = cv2.dilate(binary, kernel, iterations=1)
-    eroded = cv2.erode(dilated, kernel, iterations=1)
+    # Thresholding to get a binary image, using Otsu's method to automate threshold choice
+    _, binary = cv2.threshold(sharpened, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
 
-    return eroded
+    # Applying morphological operations to remove small noise
+    morph_kernel = np.ones((1,1), np.uint8)
+    opened = cv2.morphologyEx(binary, cv2.MORPH_OPEN, morph_kernel)
+
+    return opened
 
 def enhance_lines(image):
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
@@ -53,19 +56,17 @@ def enhance_lines(image):
     return processed_img
 
 def perform_ocr_on_cell(cell_image, numeric=False):
-    # Prepare the image for OCR
     enhanced_image = enhance_image_for_ocr(cell_image)
-    
-    # Define custom configurations based on the type of data expected
+
+    # Tesseract configuration for different scenarios
     if numeric:
-        # Optimize for numeric data
-        custom_config = r'--oem 3 --psm 6 outputbase digits'
+        # Optimized for numeric extraction
+        config = r'--oem 3 --psm 8 outputbase digits'
     else:
-        # General alphanumerical data
-        custom_config = r'--oem 3 --psm 6'
-    
-    # Performing OCR using Pytesseract with specified configurations
-    text = pytesseract.image_to_string(enhanced_image, config=custom_config)
+        # General alphanumeric configuration
+        config = r'--oem 3 --psm 6'
+
+    text = pytesseract.image_to_string(enhanced_image, config=config)
     return format_continuous_text(text)
 
 def convert_pdf_to_image(pdf_path):
@@ -134,11 +135,11 @@ def validate_and_append_cell(contour, detected_cells):
         else:
             print(f"Invalid or incomplete bounding box derived from contour.")
 
-def crop_image_with_padding(cell_image, padding=5):
-    # Apply padding to reduce the effect of borders
-    h, w = cell_image.shape[:2]
-    cropped_image = cell_image[padding:h-padding, padding:w-padding]
-    return cropped_image
+def crop_image_with_padding(cell_image, padding=10):
+    # Check if the image is smaller than the padding size
+    if cell_image.shape[0] <= 2*padding or cell_image.shape[1] <= 2*padding:
+        return cell_image  # Return the original if too small to pad
+    return cell_image[padding:-padding, padding:-padding]
 
 def process_image_for_table_detection(image):
     if image is None or image.size == 0:
