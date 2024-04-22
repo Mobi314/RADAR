@@ -12,15 +12,20 @@ import tempfile
 import io
 import string
 import re
+import numpy as np
+from sklearn.cluster import KMeans
 
 def enhance_image_for_ocr(cell_image):
     gray = cv2.cvtColor(cell_image, cv2.COLOR_BGR2GRAY)
-    clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8,8))  # Slightly higher clipLimit
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
     contrast = clahe.apply(gray)
-    
-    # Applying a fixed global threshold might sometimes yield more consistent results
-    _, binary = cv2.threshold(contrast, 120, 255, cv2.THRESH_BINARY_INV)  # Adjust threshold value based on sample images
-    
+
+    # Apply morphological operations to clean up the image
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (1, 5))
+    processed = cv2.morphologyEx(contrast, cv2.MORPH_OPEN, kernel)
+
+    # Threshold to get a binary image
+    _, binary = cv2.threshold(processed, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
     return binary
 
 def is_text_thin(image):
@@ -189,18 +194,35 @@ def process_image_for_table_detection(image):
     return detected_cells, image
 
 def classify_cells(detected_cells):
-    rows = {}
-    # Sort cells into rows based on vertical alignment (y-coordinate)
-    for cell in detected_cells:
-        x, y, w, h = cell
-        row_key = round(y / h) * h  # This groups cells more strictly by their y-coordinate
-        if row_key not in rows:
-            rows[row_key] = []
-        rows[row_key].append((x, y, w, h))
-    
-    # Sort each row by x-coordinate to order cells correctly
-    sorted_rows = {key: sorted(cells, key=lambda cell: cell[0]) for key, cells in rows.items()}
-    return sorted_rows
+    # Extract y-coordinates and x-coordinates
+    y_coords = np.array([y for _, y, _, _ in detected_cells])
+    x_coords = np.array([x for x, _, _, _ in detected_cells])
+
+    # Clustering to determine rows
+    kmeans_y = KMeans(n_clusters=int(len(detected_cells) / np.sqrt(len(detected_cells))), random_state=0).fit(y_coords.reshape(-1, 1))
+    row_labels = kmeans_y.labels_
+
+    # Clustering to determine columns
+    kmeans_x = KMeans(n_clusters=int(len(detected_cells) / np.sqrt(len(detected_cells))), random_state=0).fit(x_coords.reshape(-1, 1))
+    col_labels = kmeans_x.labels_
+
+    # Group cells into a structured table based on rows and columns
+    table = {}
+    for (x, y, w, h), row_label, col_label in zip(detected_cells, row_labels, col_labels):
+        if row_label not in table:
+            table[row_label] = {}
+        table[row_label][col_label] = (x, y, w, h)
+
+    # Sort rows and columns
+    sorted_table = {row: {col: table[row][col] for col in sorted(table[row])} for row in sorted(table)}
+
+    return sorted_table
+
+def get_cells_from_sorted_table(sorted_table):
+    rows = []
+    for row in sorted(sorted_table):
+        rows.append([sorted_table[row][col] for col in sorted(sorted_table[row])])
+    return rows
 """
 def classify_cells(detected_cells):
     rows = {}
