@@ -196,22 +196,21 @@ def convert_pdf_to_image(pdf_path):
         return None
 
     try:
-        page = doc.load_page(0)  # load the first page
-        # Default zoom set for high-quality images
-        default_zoom = 4
-
-        # Convert the first page to an image to assess its quality
-        preliminary_zoom = 2  # Lower zoom for initial quality check to save processing time
+        page = doc.load_page(0)  # Load the first page
+        # Lower zoom for initial quality check to save processing time
+        preliminary_zoom = 2
         preliminary_mat = fitz.Matrix(preliminary_zoom, preliminary_zoom)
         preliminary_pix = page.get_pixmap(matrix=preliminary_mat)
         preliminary_img = np.array(Image.open(io.BytesIO(preliminary_pix.tobytes())))
         preliminary_img = cv2.cvtColor(preliminary_img, cv2.COLOR_RGB2BGR)
 
         # Assess the quality of the image
-        if is_high_quality_image(preliminary_img):
-            zoom = default_zoom  # Use higher resolution for high-quality images
-        else:
-            zoom = 2  # Reduce resolution for scanned images which might perform better at lower resolutions
+        high_quality = is_high_quality_image(preliminary_img)
+        print(f"Image Quality Assessment: {'High' if high_quality else 'Low'} quality detected.")
+
+        # Decide on zoom level based on the image quality
+        zoom = 4 if high_quality else 2
+        print(f"Using Zoom Level: {zoom}")
 
         # Convert the page using the determined zoom factor
         mat = fitz.Matrix(zoom, zoom)
