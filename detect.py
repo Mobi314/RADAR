@@ -11,6 +11,7 @@ import os
 import io
 import string
 import re
+from sklearn.cluster import DBSCAN
 
 def enhance_image_for_ocr(cell_image):
     gray = cv2.cvtColor(cell_image, cv2.COLOR_BGR2GRAY)
@@ -133,10 +134,9 @@ def safe_open_image(path):
 
 def get_valid_bounding_box(contour):
     x, y, w, h = cv2.boundingRect(contour)
-    # Adjust criteria for valid dimensions
-    if w > 10 and h > 10 and (w/h < 10 and h/w < 10):
+    if w > 0 and h > 0 and (w/h < 15 and h/w < 15):  # Ensure reasonable dimensions
         return (x, y, w, h)
-    return None
+    return None  # This will prevent malformed tuples
 
 def safe_tuple_access(tpl, default=(0, 0, 0, 0)):
     """Safely access tuple elements, returning a default if not possible."""
@@ -205,23 +205,45 @@ def process_image_for_table_detection(image):
 def classify_cells(detected_cells):
     rows = {}
     for cell in detected_cells:
-        x, y, w, h = safe_tuple_access(cell)
+        x, y, w, h = safe_tuple_access(cell)  # Safely unpacks tuple
         if w == 0 or h == 0:
-            continue
-        
-        # Establish row groups based on y-coordinate proximity
-        found_row = False
-        for key in list(rows.keys()):
-            if abs(key - y) <= h // 2:  # Allow some overlap or proximity
+            print(f"Skipping malformed cell: {cell}")
+            continue  # Skip this cell if dimensions are zero
+
+        row_found = False
+        for key in rows.keys():
+            if abs(key - y) < 10:  # Grouping cells in the same row
                 rows[key].append((x, y, w, h))
-                found_row = True
+                row_found = True
                 break
-        if not found_row:
+        if not row_found:
             rows[y] = [(x, y, w, h)]
 
-    # Sort each row by x to order columns correctly
-    sorted_rows = {k: sorted(v, key=lambda cell: cell[0]) for k, v in rows.items()}
+    sorted_rows = []
+    for y in sorted(rows.keys()):
+        sorted_cells = sorted(rows[y], key=lambda cell: cell[0])
+        sorted_rows.append(sorted_cells)
     return sorted_rows
+
+def cluster_cells(detected_cells):
+    # Extract coordinates
+    coords = np.array([(x + w / 2, y + h / 2) for x, y, w, h in detected_cells])
+    # Clustering based on both x and y coordinates to group cells into grid-like rows and columns
+    clustering = DBSCAN(eps=30, min_samples=1).fit(coords)
+    labels = clustering.labels_
+
+    # Group cells by cluster label to determine rows and columns
+    clusters = {}
+    for label, cell in zip(labels, detected_cells):
+        if label in clusters:
+            clusters[label].append(cell)
+        else:
+            clusters[label] = [cell]
+
+    # Sort clusters (rows and columns)
+    # Find the row index by averaging y-coordinates within each cluster and sorting
+    sorted_clusters = sorted(clusters.items(), key=lambda k: np.mean([cell[1] for cell in k[1]]))
+    return sorted_clusters
 
 def format_continuous_text(text):
     # Normalize newlines, replace carriage returns with newline characters
@@ -243,27 +265,18 @@ def format_continuous_text(text):
     return text
 
 def extract_table_data(image, detected_cells):
-    """Extract data from detected cells and organize by rows and columns."""
+    """Extract data from detected cells organized by clustered rows and columns."""
     table_data = []
-    # Organize cells into rows based on their vertical alignment
-    rows = {}
-    for (x, y, w, h) in detected_cells:
-        row_key = y // h  # This groups cells into rows by their y-coordinate
-        if row_key in rows:
-            rows[row_key].append((x, y, w, h))
-        else:
-            rows[row_key] = [(x, y, w, h)]
+    sorted_clusters = cluster_cells(detected_cells)
 
-    # Sort rows and within each row sort cells by their x-coordinate to maintain left-to-right order
-    sorted_rows = sorted(rows.items(), key=lambda item: item[0])
-    for _, cells in sorted_rows:
+    for _, cells in sorted_clusters:
         row_data = []
-        for (x, y, w, h) in sorted(cells, key=lambda cell: cell[0]):
+        for (x, y, w, h) in sorted(cells, key=lambda cell: cell[0]):  # Sort cells within each row
             cell_image = image[y:y+h, x:x+w]
             cell_text = perform_ocr_on_cell(cell_image)
             row_data.append(cell_text)
         table_data.append(row_data)
-
+    
     return table_data
 
 def clean_text(text):
