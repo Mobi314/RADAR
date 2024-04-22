@@ -112,21 +112,17 @@ def convert_pdf_to_image(pdf_path):
 
     try:
         page = doc.load_page(0)  # load the first page
+        zoom = 4  # Increased zoom factor for higher resolution
+        mat = fitz.Matrix(zoom, zoom)
+        pix = page.get_pixmap(matrix=mat)
+        img = np.array(Image.open(io.BytesIO(pix.tobytes())))
+        img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+        doc.close()
+        return img
     except IndexError:
         print("Page index out of range.")
         doc.close()
         return None
-
-    zoom = 2.5
-    mat = fitz.Matrix(zoom, zoom)
-    pix = page.get_pixmap(matrix=mat)
-    img = np.array(Image.open(io.BytesIO(pix.tobytes())))
-    doc.close()
-
-    if img.size == 0:
-        print("Image loading failed, empty image array.")
-        return None
-    return img
 
 def safe_open_image(path):
     """Context manager for safely opening and closing images."""
