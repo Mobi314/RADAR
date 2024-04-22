@@ -77,16 +77,11 @@ def perform_ocr_on_cell(cell_image):
     processed_image = enhance_image_for_ocr(cell_image)
     text = pytesseract.image_to_string(processed_image, config='--oem 3 --psm 6')
 
-    # Debugging: display the processed cell image
+    # Show the processed image and close after 2 seconds
     cv2.imshow('Processed Cell Image', processed_image)
-    
-    # Automatically close after 2 seconds or wait indefinitely if a condition is met
-    if some_condition:  # Define your condition here
-        cv2.waitKey(0)  # Wait indefinitely until a key is pressed
-    else:
-        cv2.waitKey(2000)  # Wait only for 2 seconds
-
+    cv2.waitKey(2000)  # Wait for 2000 milliseconds (2 seconds)
     cv2.destroyAllWindows()
+
     print(f"OCR Output: {text}")
     return text
 
