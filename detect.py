@@ -90,12 +90,20 @@ def reduce_noise(image):
 
 def enhance_lines(image):
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    blur = cv2.GaussianBlur(gray, (5, 5), 0)
-    thresh = cv2.adaptiveThreshold(blur, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 11, 2)
+    blur = cv2.GaussianBlur(gray, (5, 5), 0)  # Blur might need adjustment based on noise level
+    
+    # Adaptive thresholding can be tweaked here
+    thresh = cv2.adaptiveThreshold(blur, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+                                   cv2.THRESH_BINARY_INV, 11, 2)
 
-    # Consider using dynamic kernel sizes based on the content of the image
-    horizontal_kernel_length = max(20, int(image.shape[1] / 25))  # Slightly smaller to capture wider columns
-    vertical_kernel_length = max(20, int(image.shape[0] / 25))
+    # Dynamically adjust kernel sizes based on the image quality or size
+    if is_high_quality_image(image):
+        kernel_scale_factor = 25
+    else:
+        kernel_scale_factor = 40  # Larger kernels for poorer quality to ensure more robust line detection
+
+    horizontal_kernel_length = max(20, int(image.shape[1] / kernel_scale_factor))
+    vertical_kernel_length = max(20, int(image.shape[0] / kernel_scale_factor))
 
     horizontal_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (horizontal_kernel_length, 1))
     vertical_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (1, vertical_kernel_length))
