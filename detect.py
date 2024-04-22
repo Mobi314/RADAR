@@ -133,7 +133,7 @@ def detect_content_type(image):
     if blacks / float(whites + blacks) > 0.5:  # More dense text regions might indicate numeric content
         return 'numeric'
     return 'alphanumeric'
-"""
+
 def convert_pdf_to_image(pdf_path):
     if not os.path.exists(pdf_path):
         print("PDF file does not exist.")
@@ -159,6 +159,48 @@ def convert_pdf_to_image(pdf_path):
             img = correct_skew(img)
             img = reduce_noise(img)
         
+        return img
+    except IndexError:
+        print("Page index out of range.")
+        doc.close()
+        return None
+"""
+def convert_pdf_to_image(pdf_path):
+    if not os.path.exists(pdf_path):
+        print("PDF file does not exist.")
+        return None
+    
+    doc = fitz.open(pdf_path)
+    if doc.page_count == 0:
+        print("No pages found in document.")
+        doc.close()
+        return None
+
+    try:
+        page = doc.load_page(0)  # load the first page
+        # Default zoom set for high-quality images
+        default_zoom = 4
+
+        # Convert the first page to an image to assess its quality
+        preliminary_zoom = 2  # Lower zoom for initial quality check to save processing time
+        preliminary_mat = fitz.Matrix(preliminary_zoom, preliminary_zoom)
+        preliminary_pix = page.get_pixmap(matrix=preliminary_mat)
+        preliminary_img = np.array(Image.open(io.BytesIO(preliminary_pix.tobytes())))
+        preliminary_img = cv2.cvtColor(preliminary_img, cv2.COLOR_RGB2BGR)
+
+        # Assess the quality of the image
+        if is_high_quality_image(preliminary_img):
+            zoom = default_zoom  # Use higher resolution for high-quality images
+        else:
+            zoom = 2  # Reduce resolution for scanned images which might perform better at lower resolutions
+
+        # Convert the page using the determined zoom factor
+        mat = fitz.Matrix(zoom, zoom)
+        pix = page.get_pixmap(matrix=mat)
+        img = np.array(Image.open(io.BytesIO(pix.tobytes())))
+        img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+        doc.close()
+
         return img
     except IndexError:
         print("Page index out of range.")
