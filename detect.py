@@ -226,24 +226,40 @@ def classify_cells(detected_cells):
     return sorted_rows
 
 def cluster_cells(detected_cells):
-    # Extract coordinates
-    coords = np.array([(x + w / 2, y + h / 2) for x, y, w, h in detected_cells])
-    # Clustering based on both x and y coordinates to group cells into grid-like rows and columns
-    clustering = DBSCAN(eps=30, min_samples=1).fit(coords)
-    labels = clustering.labels_
+    # Step 1: Cluster by y-coordinate to determine rows
+    y_coords = np.array([y + h / 2 for _, y, _, h in detected_cells])
+    y_coords = y_coords.reshape(-1, 1)
+    row_clustering = DBSCAN(eps=30, min_samples=1).fit(y_coords)  # Adjust eps if needed
+    row_labels = row_clustering.labels_
 
-    # Group cells by cluster label to determine rows and columns
-    clusters = {}
-    for label, cell in zip(labels, detected_cells):
-        if label in clusters:
-            clusters[label].append(cell)
+    # Group cells by rows
+    rows = {}
+    for label, cell in zip(row_labels, detected_cells):
+        if label in rows:
+            rows[label].append(cell)
         else:
-            clusters[label] = [cell]
+            rows[label] = [cell]
 
-    # Sort clusters (rows and columns)
-    # Find the row index by averaging y-coordinates within each cluster and sorting
-    sorted_clusters = sorted(clusters.items(), key=lambda k: np.mean([cell[1] for cell in k[1]]))
-    return sorted_clusters
+    # Step 2: Cluster each row by x-coordinate to sort columns
+    sorted_rows = []
+    for _, cells in sorted(rows.items(), key=lambda item: np.mean([cell[1] for cell in item[1]])):  # Sort rows by average y
+        x_coords = np.array([x + w / 2 for x, _, w, _ in cells])
+        x_coords = x_coords.reshape(-1, 1)
+        column_clustering = DBSCAN(eps=30, min_samples=1).fit(x_coords)  # Adjust eps if needed
+        column_labels = column_clustering.labels_
+        
+        columns = {}
+        for label, cell in zip(column_labels, cells):
+            if label in columns:
+                columns[label].append(cell)
+            else:
+                columns[label] = [cell]
+
+        # Sort columns within each row
+        sorted_columns = [sorted(columns[key], key=lambda cell: cell[0]) for key in sorted(columns.keys())]
+        sorted_rows.extend(sorted_columns)  # Extend ensures all cells in a row are added sequentially
+
+    return sorted_rows
 
 def format_continuous_text(text):
     # Normalize newlines, replace carriage returns with newline characters
@@ -267,11 +283,11 @@ def format_continuous_text(text):
 def extract_table_data(image, detected_cells):
     """Extract data from detected cells organized by clustered rows and columns."""
     table_data = []
-    sorted_clusters = cluster_cells(detected_cells)
+    sorted_rows = cluster_cells(detected_cells)
 
-    for _, cells in sorted_clusters:
+    for cells in sorted_rows:  # Each cells is a sorted list of columns in a row
         row_data = []
-        for (x, y, w, h) in sorted(cells, key=lambda cell: cell[0]):  # Sort cells within each row
+        for (x, y, w, h) in cells:
             cell_image = image[y:y+h, x:x+w]
             cell_text = perform_ocr_on_cell(cell_image)
             row_data.append(cell_text)
