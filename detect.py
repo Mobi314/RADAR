@@ -53,6 +53,41 @@ def threshold_otsu(image):
             level = i
     return level
 
+def correct_skew(image):
+    coords = np.column_stack(np.where(image > 0))
+    angle = cv2.minAreaRect(coords)[-1]
+    if angle < -45:
+        angle = -(90 + angle)
+    else:
+        angle = -angle
+    (h, w) = image.shape[:2]
+    center = (w // 2, h // 2)
+    M = cv2.getRotationMatrix2D(center, angle, 1.0)
+    rotated = cv2.warpAffine(image, M, (w, h),
+                             flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_REPLICATE)
+    return rotated
+
+def is_high_quality_image(image):
+    # Convert the image to grayscale
+    gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    
+    # Use the Laplacian function to compute the Laplacian of the image
+    laplacian = cv2.Laplacian(gray_image, cv2.CV_64F)
+    
+    # Calculate the variance of the Laplacian
+    # Variance closer to zero indicates a blurry image, and higher values indicate a sharper image
+    variance = laplacian.var()
+    
+    # Define a threshold for what you consider "high quality"
+    # This threshold may need to be adjusted based on testing different PDFs to find the best value
+    quality_threshold = 50  # This is an arbitrary value; adjust it based on your specific needs
+    
+    # Return True if the variance is above the threshold (indicating high quality)
+    return variance > quality_threshold
+
+def reduce_noise(image):
+    return cv2.medianBlur(image, 5)
+
 def enhance_lines(image):
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     blur = cv2.GaussianBlur(gray, (5, 5), 0)
@@ -111,13 +146,19 @@ def convert_pdf_to_image(pdf_path):
         return None
 
     try:
-        page = doc.load_page(0)  # load the first page
+        page = doc.load_page(0)  # Load the first page
         zoom = 4  # Increased zoom factor for higher resolution
         mat = fitz.Matrix(zoom, zoom)
         pix = page.get_pixmap(matrix=mat)
         img = np.array(Image.open(io.BytesIO(pix.tobytes())))
         img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
         doc.close()
+        
+        # Check image quality and conditionally apply preprocessing
+        if not is_high_quality_image(img):
+            img = correct_skew(img)
+            img = reduce_noise(img)
+        
         return img
     except IndexError:
         print("Page index out of range.")
@@ -166,8 +207,9 @@ def process_image_for_table_detection(image):
         print("Empty or None image passed to process_image_for_table_detection.")
         return [], None
 
-    # Apply line enhancement
+    # Apply line enhancement universally
     processed_img = enhance_lines(image)
+    
     if processed_img is None:
         print("Failed to enhance image lines.")
         return [], None
@@ -176,22 +218,18 @@ def process_image_for_table_detection(image):
     contours, hierarchy = cv2.findContours(processed_img, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_SIMPLE)
     detected_cells = []
 
-    # Check for valid hierarchy to process contours
     if hierarchy is not None:
         hierarchy = hierarchy[0]  # Get the actual hierarchy array
         for i, contour in enumerate(contours):
-            # Filter to include only child contours (assuming cells are children of table contours)
             if hierarchy[i][3] != -1:  # Has a parent contour
                 bounding_box = get_valid_bounding_box(contour)
                 if bounding_box:
                     detected_cells.append(bounding_box)
-                    # Optionally draw each bounding box on the image for visualization
                     x, y, w, h = bounding_box
                     cv2.rectangle(image, (x, y), (x + w, y + h), (0, 255, 0), 2)
                 else:
                     print(f"Invalid bounding box for contour with area {cv2.contourArea(contour)}")
 
-    # Display the processed image with detected cells for verification
     if detected_cells:
         print(f"Detected {len(detected_cells)} cells.")
         cv2.imshow("Detected Cells", image)
