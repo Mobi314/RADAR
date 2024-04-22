@@ -79,21 +79,12 @@ def perform_ocr_on_cell(cell_image):
 
     # Show the processed image and close after 2 seconds
     cv2.imshow('Processed Cell Image', processed_image)
-    cv2.waitKey(2000)  # Wait for 2000 milliseconds (2 seconds)
+    cv2.waitKey(1000)  # Wait for 1000 milliseconds (1 seconds)
     cv2.destroyAllWindows()
 
     print(f"OCR Output: {text}")
     return text
-
-"""
-def detect_content_type(image):
-    # A simple approach based on the ratio of white to black pixels
-    whites = np.sum(image == 255)
-    blacks = np.sum(image == 0)
-    if blacks / float(whites + blacks) > 0.5:  # More dense text regions might indicate numeric content
-        return 'numeric'
-    return 'alphanumeric'
-"""
+    
 def convert_pdf_to_image(pdf_path):
     if not os.path.exists(pdf_path):
         print("PDF file does not exist.")
