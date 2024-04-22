@@ -190,6 +190,20 @@ def process_image_for_table_detection(image):
 
 def classify_cells(detected_cells):
     rows = {}
+    # Sort cells into rows based on vertical alignment (y-coordinate)
+    for cell in detected_cells:
+        x, y, w, h = cell
+        row_key = round(y / h) * h  # This groups cells more strictly by their y-coordinate
+        if row_key not in rows:
+            rows[row_key] = []
+        rows[row_key].append((x, y, w, h))
+    
+    # Sort each row by x-coordinate to order cells correctly
+    sorted_rows = {key: sorted(cells, key=lambda cell: cell[0]) for key, cells in rows.items()}
+    return sorted_rows
+"""
+def classify_cells(detected_cells):
+    rows = {}
     for cell in detected_cells:
         x, y, w, h = safe_tuple_access(cell)  # Safely unpacks tuple
         if w == 0 or h == 0:
@@ -210,7 +224,7 @@ def classify_cells(detected_cells):
         sorted_cells = sorted(rows[y], key=lambda cell: cell[0])
         sorted_rows.append(sorted_cells)
     return sorted_rows
-
+"""
 def format_continuous_text(text):
     # Normalize newlines, replace carriage returns with newline characters
     text = text.replace('\r', '\n')
@@ -255,10 +269,9 @@ def extract_table_data(image, detected_cells):
     return table_data
 
 def clean_text(text):
-    """Clean text by removing non-printable characters and trimming whitespace."""
-    cleaned_text = text.strip().replace(u'\xa0', u' ')
-    printable = set(string.printable)
-    cleaned_text = ''.join(filter(lambda x: x in printable, cleaned_text))
+    """Clean text by removing unwanted characters under specific conditions."""
+    # Use regex to replace "|" when it's at the start or end of a string or surrounded by spaces
+    cleaned_text = re.sub(r'^\| |\| $', '', text.strip())
     return cleaned_text
 
 def save_to_excel(table_data, base_filename="output"):
