@@ -133,9 +133,10 @@ def safe_open_image(path):
 
 def get_valid_bounding_box(contour):
     x, y, w, h = cv2.boundingRect(contour)
-    if w > 0 and h > 0 and (w/h < 15 and h/w < 15):  # Ensure reasonable dimensions
+    # Adjust criteria for valid dimensions
+    if w > 10 and h > 10 and (w/h < 10 and h/w < 10):
         return (x, y, w, h)
-    return None  # This will prevent malformed tuples
+    return None
 
 def safe_tuple_access(tpl, default=(0, 0, 0, 0)):
     """Safely access tuple elements, returning a default if not possible."""
@@ -204,24 +205,22 @@ def process_image_for_table_detection(image):
 def classify_cells(detected_cells):
     rows = {}
     for cell in detected_cells:
-        x, y, w, h = safe_tuple_access(cell)  # Safely unpacks tuple
+        x, y, w, h = safe_tuple_access(cell)
         if w == 0 or h == 0:
-            print(f"Skipping malformed cell: {cell}")
-            continue  # Skip this cell if dimensions are zero
-
-        row_found = False
-        for key in rows.keys():
-            if abs(key - y) < 10:  # Grouping cells in the same row
+            continue
+        
+        # Establish row groups based on y-coordinate proximity
+        found_row = False
+        for key in list(rows.keys()):
+            if abs(key - y) <= h // 2:  # Allow some overlap or proximity
                 rows[key].append((x, y, w, h))
-                row_found = True
+                found_row = True
                 break
-        if not row_found:
+        if not found_row:
             rows[y] = [(x, y, w, h)]
 
-    sorted_rows = []
-    for y in sorted(rows.keys()):
-        sorted_cells = sorted(rows[y], key=lambda cell: cell[0])
-        sorted_rows.append(sorted_cells)
+    # Sort each row by x to order columns correctly
+    sorted_rows = {k: sorted(v, key=lambda cell: cell[0]) for k, v in rows.items()}
     return sorted_rows
 
 def format_continuous_text(text):
