@@ -79,22 +79,29 @@ def correct_skew(image):
     return rotated
 
 def is_high_quality_image(image):
-    # Convert the image to grayscale
-    gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+
+    # Sobel operator to detect vertical and horizontal edges
+    sobelx = cv2.Sobel(gray, cv2.CV_64F, 1, 0, ksize=3)
+    sobely = cv2.Sobel(gray, cv2.CV_64F, 0, 1, ksize=3)
+    sobel = np.hypot(sobelx, sobely)
     
-    # Use the Laplacian function to compute the Laplacian of the image
-    laplacian = cv2.Laplacian(gray_image, cv2.CV_64F)
+    # Variance of Sobel
+    sobel_variance = np.var(sobel)
     
-    # Calculate the variance of the Laplacian
-    # Variance closer to zero indicates a blurry image, and higher values indicate a sharper image
-    variance = laplacian.var()
-    
-    # Define a threshold for what you consider "high quality"
-    # This threshold may need to be adjusted based on testing different PDFs to find the best value
-    quality_threshold = 50  # This is an arbitrary value; adjust it based on your specific needs
-    
-    # Return True if the variance is above the threshold (indicating high quality)
-    return variance > quality_threshold
+    # Edge density using Canny
+    edges = cv2.Canny(gray, 50, 150)
+    edge_density = np.sum(edges) / (image.shape[0] * image.shape[1])
+
+    # Set thresholds for Sobel variance and edge density
+    # These thresholds would need to be determined based on testing with a range of your PDFs
+    sobel_threshold = 300  # Example threshold, needs calibration
+    edge_density_threshold = 0.01  # Example threshold, needs calibration
+
+    # Assess image quality
+    if sobel_variance > sobel_threshold and edge_density > edge_density_threshold:
+        return True
+    return False
 
 def reduce_noise(image):
     return cv2.medianBlur(image, 5)
