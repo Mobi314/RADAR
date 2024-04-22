@@ -425,6 +425,7 @@ def save_to_excel(table_data, base_filename="output"):
         print(f"Error writing to Excel: {e}")
 
 # Test exporting a simple DataFrame to ensure Excel compatibility
+"""
 def test_excel_output():
     print("Testing basic DataFrame export...")
     df_test = pd.DataFrame({'Numbers': [1, 2, 3], 'Letters': ['A', 'B', 'C']})
@@ -433,6 +434,7 @@ def test_excel_output():
         print("Test Excel file created successfully.")
     except Exception as e:
         print("Failed to create test Excel file:", e)
+"""
 
 """
 def remove_image_file(image_path):
