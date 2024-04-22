@@ -34,12 +34,14 @@ def enhance_image_for_ocr(cell_image):
     
     return binary
 
+"""
 def is_text_thin(image):
     # Estimate text thickness based on the distribution of pixel values
     whites = np.sum(image > 128)
     blacks = np.sum(image <= 128)
     return whites / float(whites + blacks) > 0.5
-
+"""
+"""
 def threshold_otsu(image):
     # Calculate histogram
     hist = cv2.calcHist([image], [0], None, [256], [0,256])
@@ -63,6 +65,7 @@ def threshold_otsu(image):
             maximum = between
             level = i
     return level
+"""
 
 def correct_skew(image):
     coords = np.column_stack(np.where(image > 0))
@@ -146,10 +149,12 @@ def perform_ocr_on_cell(cell_image):
     print(f"OCR Output: {text}")
     return text
 
+"""
 def estimate_text_density(image):
     non_white_pixels = np.sum(image < 255)
     total_pixels = image.size
     return non_white_pixels / total_pixels
+"""
 
 """
 def detect_content_type(image):
@@ -231,14 +236,16 @@ def convert_pdf_to_image(pdf_path, user_choice):
         doc.close()
         return None
 
+"""
 def safe_open_image(path):
-    """Context manager for safely opening and closing images."""
+    #Context manager for safely opening and closing images.
     img = Image.open(path)
     try:
         yield img
     finally:
         img.close()
-
+"""
+        
 def get_valid_bounding_box(contour):
     x, y, w, h = cv2.boundingRect(contour)
     if w > 0 and h > 0 and (w/h < 15 and h/w < 15):  # Ensure reasonable dimensions
@@ -427,6 +434,7 @@ def test_excel_output():
     except Exception as e:
         print("Failed to create test Excel file:", e)
 
+"""
 def remove_image_file(image_path):
     if image_path:
         try:
@@ -436,6 +444,7 @@ def remove_image_file(image_path):
             print(f"Error deleting file {image_path}: {e}")
     else:
         print("No valid image path provided for deletion.")
+"""
 
 def select_pdf_and_convert():
     root = tk.Tk()
