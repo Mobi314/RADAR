@@ -15,11 +15,22 @@ from sklearn.cluster import DBSCAN
 
 def enhance_image_for_ocr(cell_image):
     gray = cv2.cvtColor(cell_image, cv2.COLOR_BGR2GRAY)
-    clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8,8))  # Slightly higher clipLimit
+
+    if is_high_quality_image(cell_image):
+        # High-quality images: Use aggressive CLAHE
+        clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8,8))
+    else:
+        # Lower-quality scans: Use milder contrast enhancement
+        clahe = cv2.createCLAHE(clipLimit=1.0, tileGridSize=(8,8))
+
     contrast = clahe.apply(gray)
     
-    # Applying a fixed global threshold might sometimes yield more consistent results
-    _, binary = cv2.threshold(contrast, 120, 255, cv2.THRESH_BINARY_INV)  # Adjust threshold value based on sample images
+    # Adaptive thresholding for variable image qualities
+    if is_high_quality_image(cell_image):
+        _, binary = cv2.threshold(contrast, 120, 255, cv2.THRESH_BINARY_INV)
+    else:
+        binary = cv2.adaptiveThreshold(contrast, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+                                       cv2.THRESH_BINARY_INV, 11, 2)
     
     return binary
 
