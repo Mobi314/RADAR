@@ -17,18 +17,17 @@ def enhance_image_for_ocr(cell_image):
     # Convert to grayscale
     gray = cv2.cvtColor(cell_image, cv2.COLOR_BGR2GRAY)
     
-    # Dynamic CLAHE
+    # Apply CLAHE to improve image contrast
     clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
     contrast = clahe.apply(gray)
 
-    # Evaluate the text characteristics to decide on thresholding method
-    if is_text_thin(contrast):
-        # Use a more sensitive threshold for thin text
-        _, binary = cv2.threshold(contrast, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
-    else:
-        # Use regular thresholding for bold text
-        thresh_val = threshold_otsu(contrast)  # Otsu's method dynamically determines the threshold value
-        _, binary = cv2.threshold(contrast, thresh_val, 255, cv2.THRESH_BINARY)
+    # Use Otsu's method to dynamically determine the threshold value
+    thresh_val = threshold_otsu(contrast)
+    _, binary = cv2.threshold(contrast, thresh_val, 255, cv2.THRESH_BINARY)
+
+    # Optionally apply morphological operations if needed
+    kernel = np.ones((1, 1), np.uint8)  # Adjust kernel size based on specific needs
+    binary = cv2.morphologyEx(binary, cv2.MORPH_OPEN, kernel)
 
     return binary
 
@@ -84,32 +83,16 @@ def enhance_lines(image):
 
 def perform_ocr_on_cell(cell_image):
     processed_image = enhance_image_for_ocr(cell_image)
-
-    # Estimate text density for dynamic OCR settings
     text_density = estimate_text_density(processed_image)
-    if text_density < 0.1:  # This threshold might need tuning
-        custom_config = r'--oem 3 --psm 8'  # Single word, good for sparse text
+    if text_density < 0.1:
+        custom_config = r'--oem 3 --psm 8'  # Adjust settings if needed
     else:
-        custom_config = r'--oem 3 --psm 6'  # General text, more suitable for denser text
+        custom_config = r'--oem 3 --psm 6'
 
-    # OCR processing
     text = pytesseract.image_to_string(processed_image, config=custom_config)
     formatted_text = format_continuous_text(text)
-
-    # Debugging: Display the processed cell image and OCR result
-    #cv2.imshow('Cell Image', processed_image)
-    #cv2.waitKey(0)  # Press any key to continue
-    #cv2.destroyAllWindows()
-
-    # Print the extracted text to the console
     print(f"Extracted Text: {formatted_text}")
-
     return formatted_text
-
-def estimate_text_density(image):
-    non_white_pixels = np.sum(image < 255)
-    total_pixels = image.size
-    return non_white_pixels / total_pixels
 
 """
 def detect_content_type(image):
@@ -133,21 +116,17 @@ def convert_pdf_to_image(pdf_path):
 
     try:
         page = doc.load_page(0)  # load the first page
+        zoom = 4  # Increased zoom factor for higher resolution
+        mat = fitz.Matrix(zoom, zoom)
+        pix = page.get_pixmap(matrix=mat)
+        img = np.array(Image.open(io.BytesIO(pix.tobytes())))
+        img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+        doc.close()
+        return img
     except IndexError:
         print("Page index out of range.")
         doc.close()
         return None
-
-    zoom = 2.5
-    mat = fitz.Matrix(zoom, zoom)
-    pix = page.get_pixmap(matrix=mat)
-    img = np.array(Image.open(io.BytesIO(pix.tobytes())))
-    doc.close()
-
-    if img.size == 0:
-        print("Image loading failed, empty image array.")
-        return None
-    return img
 
 def safe_open_image(path):
     """Context manager for safely opening and closing images."""
