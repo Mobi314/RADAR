@@ -306,7 +306,7 @@ def process_image_for_table_detection(image):
     if detected_cells:
         print(f"Detected {len(detected_cells)} cells.")
         cv2.imshow("Detected Cells", image)
-        cv2.waitKey(0)  # Wait for a key press to close the display window
+        cv2.waitKey(3000)  # Wait for a key press to close the display window
         cv2.destroyAllWindows()
     else:
         print("No tables detected.")
