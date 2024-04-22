@@ -4,7 +4,7 @@ import pytesseract
 from PIL import Image, ImageEnhance
 import fitz  # PyMuPDF
 import tkinter as tk
-from tkinter import filedialog
+from tkinter import filedialog, Label, Button, Checkbutton, IntVar, messagebox
 import pandas as pd
 from datetime import datetime
 import os
@@ -191,7 +191,7 @@ def convert_pdf_to_image(pdf_path):
         doc.close()
         return None
 """
-def convert_pdf_to_image(pdf_path):
+def convert_pdf_to_image(pdf_path, user_choice):
     if not os.path.exists(pdf_path):
         print("PDF file does not exist.")
         return None
@@ -204,20 +204,20 @@ def convert_pdf_to_image(pdf_path):
 
     try:
         page = doc.load_page(0)  # Load the first page
-        # Lower zoom for initial quality check to save processing time
+        
+        # Preliminary image for quality check
         preliminary_zoom = 2
         preliminary_mat = fitz.Matrix(preliminary_zoom, preliminary_zoom)
         preliminary_pix = page.get_pixmap(matrix=preliminary_mat)
         preliminary_img = np.array(Image.open(io.BytesIO(preliminary_pix.tobytes())))
         preliminary_img = cv2.cvtColor(preliminary_img, cv2.COLOR_RGB2BGR)
 
-        # Assess the quality of the image
-        high_quality = is_high_quality_image(preliminary_img)
-        print(f"Image Quality Assessment: {'High' if high_quality else 'Low'} quality detected.")
+        # Determine if the image is high quality based on automatic assessment
+        high_quality = is_high_quality_image(preliminary_img) if user_choice == -1 else user_choice
 
-        # Decide on zoom level based on the image quality
+        # Use the user choice or automatic detection to set zoom
         zoom = 4 if high_quality else 2
-        print(f"Using Zoom Level: {zoom}")
+        print(f"Using Zoom Level: {zoom} (High Quality: {'Yes' if high_quality else 'No'})")
 
         # Convert the page using the determined zoom factor
         mat = fitz.Matrix(zoom, zoom)
@@ -225,7 +225,6 @@ def convert_pdf_to_image(pdf_path):
         img = np.array(Image.open(io.BytesIO(pix.tobytes())))
         img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
         doc.close()
-
         return img
     except IndexError:
         print("Page index out of range.")
@@ -429,19 +428,32 @@ def test_excel_output():
         print("Failed to create test Excel file:", e)
 
 def select_pdf_and_convert():
+    def on_open():
+        pdf_path = filedialog.askopenfilename(filetypes=[("PDF files", "*.pdf")])
+        if not pdf_path:
+            return
+        
+        # Ask user for input or use automatic detection
+        user_choice = messagebox.askyesnocancel("PDF Type", "Is this a high-quality formatted PDF?\nYes for formatted, No for scanned, Cancel for automatic detection.")
+        if user_choice is None:  # Automatic detection
+            user_choice = -1
+        
+        image = convert_pdf_to_image(pdf_path, user_choice)
+        if image is not None:
+            detected_cells, _ = process_image_for_table_detection(image)
+            if detected_cells:
+                table_data = extract_table_data(image, detected_cells)
+                save_to_excel(table_data)
+            else:
+                print("No tables detected.")
+            cv2.destroyAllWindows()
+
+    # Setup the main window
     root = tk.Tk()
-    root.withdraw()
-    pdf_path = filedialog.askopenfilename(filetypes=[("PDF files", "*.pdf")])
-    if not pdf_path:
-        return
-    image = convert_pdf_to_image(pdf_path)
-    detected_cells, _ = process_image_for_table_detection(image)
-    if detected_cells:
-        table_data = extract_table_data(image, detected_cells)
-        save_to_excel(table_data)
-    else:
-        print("No tables detected.")
-    cv2.destroyAllWindows()
+    root.title("Select PDF Type")
+    Label(root, text="Select PDF and Choose Processing Type:").pack(pady=10)
+    Button(root, text="Open PDF", command=on_open).pack(pady=20)
+    root.mainloop()
 
 def remove_image_file(image_path):
     if image_path:
