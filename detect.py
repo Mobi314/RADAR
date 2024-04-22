@@ -12,20 +12,15 @@ import tempfile
 import io
 import string
 import re
-import numpy as np
-from sklearn.cluster import KMeans
 
 def enhance_image_for_ocr(cell_image):
     gray = cv2.cvtColor(cell_image, cv2.COLOR_BGR2GRAY)
-    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
+    clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8,8))  # Slightly higher clipLimit
     contrast = clahe.apply(gray)
-
-    # Apply morphological operations to clean up the image
-    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (1, 5))
-    processed = cv2.morphologyEx(contrast, cv2.MORPH_OPEN, kernel)
-
-    # Threshold to get a binary image
-    _, binary = cv2.threshold(processed, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+    
+    # Applying a fixed global threshold might sometimes yield more consistent results
+    _, binary = cv2.threshold(contrast, 120, 255, cv2.THRESH_BINARY_INV)  # Adjust threshold value based on sample images
+    
     return binary
 
 def is_text_thin(image):
@@ -84,12 +79,26 @@ def perform_ocr_on_cell(cell_image):
 
     # Show the processed image and close after 2 seconds
     cv2.imshow('Processed Cell Image', processed_image)
-    cv2.waitKey(1000)  # Wait for 1000 milliseconds (1 seconds)
+    cv2.waitKey(1000)  # Wait for 2000 milliseconds (2 seconds)
     cv2.destroyAllWindows()
 
     print(f"OCR Output: {text}")
     return text
-    
+
+def estimate_text_density(image):
+    non_white_pixels = np.sum(image < 255)
+    total_pixels = image.size
+    return non_white_pixels / total_pixels
+
+"""
+def detect_content_type(image):
+    # A simple approach based on the ratio of white to black pixels
+    whites = np.sum(image == 255)
+    blacks = np.sum(image == 0)
+    if blacks / float(whites + blacks) > 0.5:  # More dense text regions might indicate numeric content
+        return 'numeric'
+    return 'alphanumeric'
+"""
 def convert_pdf_to_image(pdf_path):
     if not os.path.exists(pdf_path):
         print("PDF file does not exist.")
@@ -103,17 +112,21 @@ def convert_pdf_to_image(pdf_path):
 
     try:
         page = doc.load_page(0)  # load the first page
-        zoom = 4  # Increased zoom factor for higher resolution
-        mat = fitz.Matrix(zoom, zoom)
-        pix = page.get_pixmap(matrix=mat)
-        img = np.array(Image.open(io.BytesIO(pix.tobytes())))
-        img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
-        doc.close()
-        return img
     except IndexError:
         print("Page index out of range.")
         doc.close()
         return None
+
+    zoom = 2.5
+    mat = fitz.Matrix(zoom, zoom)
+    pix = page.get_pixmap(matrix=mat)
+    img = np.array(Image.open(io.BytesIO(pix.tobytes())))
+    doc.close()
+
+    if img.size == 0:
+        print("Image loading failed, empty image array.")
+        return None
+    return img
 
 def safe_open_image(path):
     """Context manager for safely opening and closing images."""
@@ -194,37 +207,6 @@ def process_image_for_table_detection(image):
     return detected_cells, image
 
 def classify_cells(detected_cells):
-    # Extract y-coordinates and x-coordinates
-    y_coords = np.array([y for _, y, _, _ in detected_cells])
-    x_coords = np.array([x for x, _, _, _ in detected_cells])
-
-    # Clustering to determine rows
-    kmeans_y = KMeans(n_clusters=int(len(detected_cells) / np.sqrt(len(detected_cells))), random_state=0).fit(y_coords.reshape(-1, 1))
-    row_labels = kmeans_y.labels_
-
-    # Clustering to determine columns
-    kmeans_x = KMeans(n_clusters=int(len(detected_cells) / np.sqrt(len(detected_cells))), random_state=0).fit(x_coords.reshape(-1, 1))
-    col_labels = kmeans_x.labels_
-
-    # Group cells into a structured table based on rows and columns
-    table = {}
-    for (x, y, w, h), row_label, col_label in zip(detected_cells, row_labels, col_labels):
-        if row_label not in table:
-            table[row_label] = {}
-        table[row_label][col_label] = (x, y, w, h)
-
-    # Sort rows and columns
-    sorted_table = {row: {col: table[row][col] for col in sorted(table[row])} for row in sorted(table)}
-
-    return sorted_table
-
-def get_cells_from_sorted_table(sorted_table):
-    rows = []
-    for row in sorted(sorted_table):
-        rows.append([sorted_table[row][col] for col in sorted(sorted_table[row])])
-    return rows
-"""
-def classify_cells(detected_cells):
     rows = {}
     for cell in detected_cells:
         x, y, w, h = safe_tuple_access(cell)  # Safely unpacks tuple
@@ -246,7 +228,7 @@ def classify_cells(detected_cells):
         sorted_cells = sorted(rows[y], key=lambda cell: cell[0])
         sorted_rows.append(sorted_cells)
     return sorted_rows
-"""
+
 def format_continuous_text(text):
     # Normalize newlines, replace carriage returns with newline characters
     text = text.replace('\r', '\n')
@@ -291,9 +273,10 @@ def extract_table_data(image, detected_cells):
     return table_data
 
 def clean_text(text):
-    """Clean text by removing unwanted characters under specific conditions."""
-    # Use regex to replace "|" when it's at the start or end of a string or surrounded by spaces
-    cleaned_text = re.sub(r'^\| |\| $', '', text.strip())
+    """Clean text by removing non-printable characters and trimming whitespace."""
+    cleaned_text = text.strip().replace(u'\xa0', u' ')
+    printable = set(string.printable)
+    cleaned_text = ''.join(filter(lambda x: x in printable, cleaned_text))
     return cleaned_text
 
 def save_to_excel(table_data, base_filename="output"):
