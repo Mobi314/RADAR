@@ -14,21 +14,13 @@ import string
 import re
 
 def enhance_image_for_ocr(cell_image):
-    # Convert to grayscale
     gray = cv2.cvtColor(cell_image, cv2.COLOR_BGR2GRAY)
-    
-    # Apply CLAHE to improve image contrast
-    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
+    clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8,8))  # Slightly higher clipLimit
     contrast = clahe.apply(gray)
-
-    # Use Otsu's method to dynamically determine the threshold value
-    thresh_val = threshold_otsu(contrast)
-    _, binary = cv2.threshold(contrast, thresh_val, 255, cv2.THRESH_BINARY)
-
-    # Optionally apply morphological operations if needed
-    kernel = np.ones((1, 1), np.uint8)  # Adjust kernel size based on specific needs
-    binary = cv2.morphologyEx(binary, cv2.MORPH_OPEN, kernel)
-
+    
+    # Applying a fixed global threshold might sometimes yield more consistent results
+    _, binary = cv2.threshold(contrast, 120, 255, cv2.THRESH_BINARY_INV)  # Adjust threshold value based on sample images
+    
     return binary
 
 def is_text_thin(image):
@@ -83,16 +75,14 @@ def enhance_lines(image):
 
 def perform_ocr_on_cell(cell_image):
     processed_image = enhance_image_for_ocr(cell_image)
-    text_density = estimate_text_density(processed_image)
-    if text_density < 0.1:
-        custom_config = r'--oem 3 --psm 8'  # Adjust settings if needed
-    else:
-        custom_config = r'--oem 3 --psm 6'
+    text = pytesseract.image_to_string(processed_image, config='--oem 3 --psm 6')
+    
+    cv2.imshow('Processed Image', binary)
+    cv2.waitKey(2000)
+    cv2.destroyAllWindows()
 
-    text = pytesseract.image_to_string(processed_image, config=custom_config)
-    formatted_text = format_continuous_text(text)
-    print(f"Extracted Text: {formatted_text}")
-    return formatted_text
+    print(f"OCR Output: {text}")
+    return text
 
 """
 def detect_content_type(image):
