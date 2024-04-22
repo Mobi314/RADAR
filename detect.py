@@ -438,12 +438,14 @@ def remove_image_file(image_path):
         print("No valid image path provided for deletion.")
 
 def select_pdf_and_convert():
+    root = tk.Tk()
+    root.title("PDF Processing Tool")
+
     def on_open():
         pdf_path = filedialog.askopenfilename(filetypes=[("PDF files", "*.pdf")])
         if not pdf_path:
             return
         
-        # Ask user for input or use automatic detection
         user_choice = messagebox.askyesnocancel("PDF Type", "Is this a high-quality formatted PDF?\nYes for formatted, No for scanned, Cancel for automatic detection.")
         if user_choice is None:  # Automatic detection
             user_choice = -1
@@ -454,20 +456,19 @@ def select_pdf_and_convert():
             if detected_cells:
                 table_data = extract_table_data(image, detected_cells)
                 save_to_excel(table_data)
-                root.destroy()  # Close the GUI after exporting
+                messagebox.showinfo("Success", "The file has been processed and saved successfully.")
             else:
-                print("No tables detected.")
+                messagebox.showinfo("Result", "No tables detected.")
             cv2.destroyAllWindows()
-    
-    def exit_program():
-        root.destroy()  # Close the GUI
-    
-    # Setup the main window
-    root = tk.Tk()
-    root.title("Select PDF Type")
-    Label(root, text="Select PDF and Choose Processing Type:").pack(pady=10)
+
+    def on_exit():
+        root.quit()  # Stops the mainloop
+        root.destroy()  # This is necessary on Windows to prevent Fatal Python Error: PyEval_RestoreThread: NULL tstate
+
+    Label(root, text="Select PDF and choose processing type:").pack(pady=10)
     Button(root, text="Open PDF", command=on_open).pack(pady=20)
-    Button(root, text="Exit", command=exit_program).pack(pady=10)
+    Button(root, text="Exit", command=on_exit).pack(pady=10)
+
     root.mainloop()
 
 if __name__ == "__main__":
