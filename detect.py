@@ -8,7 +8,6 @@ from tkinter import filedialog
 import pandas as pd
 from datetime import datetime
 import os
-import tempfile
 import io
 import string
 import re
