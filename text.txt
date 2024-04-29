@@ -1,0 +1,8 @@
+IF DateTimeDiff(DateTimeToday(), [Path to Green Date], "days") >= 14 THEN "Severely Overdue"
+ELSEIF DateTimeDiff(DateTimeToday(), [Path to Green Date], "days") >= 0 THEN "Overdue"
+ELSE "On Track"
+ENDIF
+
+IF [Program Status] = "Open" AND DateTimeDiff(DateTimeToday(), [Program Start Date], "days") >= 30 THEN "Yes"
+ELSE "No"
+ENDIF
