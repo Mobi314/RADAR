@@ -322,17 +322,22 @@ def select_pdf_and_convert():
     
     # Variables to hold the PDF path and page selection
     pdf_path_var = tk.StringVar(root)
+    
+    # Function to handle file selection
+    def on_open():
+        pdf_path = filedialog.askopenfilename(filetypes=[("PDF files", "*.pdf")])
+        pdf_path_var.set(pdf_path)  # Store the selected PDF path
+
+    # GUI elements for file selection
+    Button(root, text="Open PDF", command=on_open).pack(pady=20)
+
+    # Entry for page numbers
     page_entry = Entry(root)
     page_entry.insert(0, "All")  # Default value set to 'All'
     page_entry.pack(pady=10)
 
     # Label for page entry instructions
     Label(root, text="Enter page numbers like '1-3,5' or 'All' for all pages:").pack(pady=10)
-    
-    # Function to handle file selection
-    def on_open():
-        pdf_path = filedialog.askopenfilename(filetypes=[("PDF files", "*.pdf")])
-        pdf_path_var.set(pdf_path)  # Store the selected PDF path
 
     # Export button function
     def on_export():
@@ -371,8 +376,7 @@ def select_pdf_and_convert():
         root.quit()  # Stops the mainloop
         root.destroy()  # This is necessary on Windows to prevent Fatal Python Error: PyEval_RestoreThread: NULL tstate
 
-    # GUI elements
-    Button(root, text="Open PDF", command=on_open).pack(pady=20)
+    # GUI elements for process control
     Button(root, text="Export", command=on_export).pack(pady=10)
     Button(root, text="Exit", command=on_exit).pack(pady=10)
 
