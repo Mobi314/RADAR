@@ -320,6 +320,15 @@ def select_pdf_and_convert():
     root = tk.Tk()
     root.title("PDF Processing Tool")
     root.geometry("600x400")
+
+    # Load and display the company logo
+    logo_path = "path_to_your_logo.png"  # Specify the path to your logo image
+    logo_image = Image.open(logo_path)
+    logo_image = logo_image.resize((100, 50), Image.ANTIALIAS)  # Resize if necessary
+    logo_photo = ImageTk.PhotoImage(logo_image)
+    logo_label = Label(root, image=logo_photo)
+    logo_label.image = logo_photo  # Keep a reference to avoid garbage collection
+    logo_label.pack(pady=10)
     
     # Variables to hold the PDF path and page selection
     pdf_path_var = tk.StringVar(root)
