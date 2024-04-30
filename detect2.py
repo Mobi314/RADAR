@@ -319,12 +319,20 @@ def save_to_excel(table_data, workbook, sheet_name):
 def select_pdf_and_convert():
     root = tk.Tk()
     root.title("PDF Processing Tool")
-    root.geometry("600x400")
+    root.geometry("600x500")
 
     # Load and display the company logo
-    logo_path = "path_to_your_logo.png"  # Specify the path to your logo image
+    logo_path = "Company_Logo.png"  # Specify the path to your logo image
     logo_image = Image.open(logo_path)
     logo_image = logo_image.resize((100, 50), Image.ANTIALIAS)  # Resize if necessary
+    logo_photo = ImageTk.PhotoImage(logo_image)
+    logo_label = Label(root, image=logo_photo)
+    logo_label.image = logo_photo  # Keep a reference to avoid garbage collection
+    logo_label.pack(pady=10)
+
+    logo_path = "P2E_logo.png"  # Specify the path to your logo image
+    logo_image = Image.open(logo_path)
+    logo_image = logo_image.resize((90, 90), Image.ANTIALIAS)  # Resize if necessary
     logo_photo = ImageTk.PhotoImage(logo_image)
     logo_label = Label(root, image=logo_photo)
     logo_label.image = logo_photo  # Keep a reference to avoid garbage collection
