@@ -110,7 +110,7 @@ def perform_ocr_on_cell(cell_image):
 
     # Show the processed image and close after 2 seconds
     cv2.imshow('Processed Cell Image', processed_image)
-    cv2.waitKey(1000)  # Wait for 2000 milliseconds (2 seconds)
+    cv2.waitKey(400)  # Wait for 2000 milliseconds (2 seconds)
     cv2.destroyAllWindows()
 
     print(f"OCR Output: {text}")
