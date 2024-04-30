@@ -320,15 +320,27 @@ def select_pdf_and_convert():
     root = tk.Tk()
     root.title("PDF Processing Tool")
     
+    # Variables to hold the PDF path and page selection
+    pdf_path_var = tk.StringVar(root)
     page_entry = Entry(root)
+    page_entry.insert(0, "All")  # Default value set to 'All'
     page_entry.pack(pady=10)
-    page_entry.insert(0, "Enter page numbers like '1-3,5' or 'all' for all pages")
 
+    # Label for page entry instructions
+    Label(root, text="Enter page numbers like '1-3,5' or 'All' for all pages:").pack(pady=10)
+    
+    # Function to handle file selection
     def on_open():
         pdf_path = filedialog.askopenfilename(filetypes=[("PDF files", "*.pdf")])
-        if not pdf_path:
-            return
+        pdf_path_var.set(pdf_path)  # Store the selected PDF path
 
+    # Export button function
+    def on_export():
+        pdf_path = pdf_path_var.get()  # Retrieve the stored PDF path
+        if not pdf_path:
+            messagebox.showinfo("Error", "Please select a PDF file first.")
+            return
+        
         page_text = page_entry.get().replace(' ', '').lower()
         doc = fitz.open(pdf_path)
 
@@ -354,12 +366,14 @@ def select_pdf_and_convert():
         messagebox.showinfo("Success", "The file has been processed and saved successfully.")
         doc.close()
 
+    # Function to properly close the application
     def on_exit():
         root.quit()  # Stops the mainloop
         root.destroy()  # This is necessary on Windows to prevent Fatal Python Error: PyEval_RestoreThread: NULL tstate
 
-    Label(root, text="Select PDF and choose processing type:").pack(pady=10)
+    # GUI elements
     Button(root, text="Open PDF", command=on_open).pack(pady=20)
+    Button(root, text="Export", command=on_export).pack(pady=10)
     Button(root, text="Exit", command=on_exit).pack(pady=10)
 
     root.mainloop()
