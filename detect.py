@@ -34,39 +34,6 @@ def enhance_image_for_ocr(cell_image):
     
     return binary
 
-"""
-def is_text_thin(image):
-    # Estimate text thickness based on the distribution of pixel values
-    whites = np.sum(image > 128)
-    blacks = np.sum(image <= 128)
-    return whites / float(whites + blacks) > 0.5
-"""
-"""
-def threshold_otsu(image):
-    # Calculate histogram
-    hist = cv2.calcHist([image], [0], None, [256], [0,256])
-    total = image.size
-    sumB = 0
-    wB = 0
-    maximum = 0.0
-    sum1 = np.sum([i * hist[i] for i in range(256)])
-    for i in range(256):
-        wB += hist[i]
-        if wB == 0:
-            continue
-        wF = total - wB
-        if wF == 0:
-            break
-        sumB += i * hist[i]
-        mB = sumB / wB
-        mF = (sum1 - sumB) / wF
-        between = wB * wF * ((mB - mF) ** 2)
-        if between > maximum:
-            maximum = between
-            level = i
-    return level
-"""
-
 def correct_skew(image):
     coords = np.column_stack(np.where(image > 0))
     angle = cv2.minAreaRect(coords)[-1]
@@ -149,53 +116,6 @@ def perform_ocr_on_cell(cell_image):
     print(f"OCR Output: {text}")
     return text
 
-"""
-def estimate_text_density(image):
-    non_white_pixels = np.sum(image < 255)
-    total_pixels = image.size
-    return non_white_pixels / total_pixels
-"""
-
-"""
-def detect_content_type(image):
-    # A simple approach based on the ratio of white to black pixels
-    whites = np.sum(image == 255)
-    blacks = np.sum(image == 0)
-    if blacks / float(whites + blacks) > 0.5:  # More dense text regions might indicate numeric content
-        return 'numeric'
-    return 'alphanumeric'
-
-def convert_pdf_to_image(pdf_path):
-    if not os.path.exists(pdf_path):
-        print("PDF file does not exist.")
-        return None
-    
-    doc = fitz.open(pdf_path)
-    if doc.page_count == 0:
-        print("No pages found in document.")
-        doc.close()
-        return None
-
-    try:
-        page = doc.load_page(0)  # Load the first page
-        zoom = 4  # Increased zoom factor for higher resolution
-        mat = fitz.Matrix(zoom, zoom)
-        pix = page.get_pixmap(matrix=mat)
-        img = np.array(Image.open(io.BytesIO(pix.tobytes())))
-        img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
-        doc.close()
-        
-        # Check image quality and conditionally apply preprocessing
-        if not is_high_quality_image(img):
-            img = correct_skew(img)
-            img = reduce_noise(img)
-        
-        return img
-    except IndexError:
-        print("Page index out of range.")
-        doc.close()
-        return None
-"""
 def convert_pdf_to_image(pdf_path, user_choice):
     if not os.path.exists(pdf_path):
         print("PDF file does not exist.")
@@ -235,17 +155,7 @@ def convert_pdf_to_image(pdf_path, user_choice):
         print("Page index out of range.")
         doc.close()
         return None
-
-"""
-def safe_open_image(path):
-    #Context manager for safely opening and closing images.
-    img = Image.open(path)
-    try:
-        yield img
-    finally:
-        img.close()
-"""
-        
+      
 def get_valid_bounding_box(contour):
     x, y, w, h = cv2.boundingRect(contour)
     if w > 0 and h > 0 and (w/h < 15 and h/w < 15):  # Ensure reasonable dimensions
@@ -424,30 +334,6 @@ def save_to_excel(table_data, base_filename="output"):
     except Exception as e:
         print(f"Error writing to Excel: {e}")
 
-# Test exporting a simple DataFrame to ensure Excel compatibility
-"""
-def test_excel_output():
-    print("Testing basic DataFrame export...")
-    df_test = pd.DataFrame({'Numbers': [1, 2, 3], 'Letters': ['A', 'B', 'C']})
-    try:
-        df_test.to_excel("test_output.xlsx", index=False)
-        print("Test Excel file created successfully.")
-    except Exception as e:
-        print("Failed to create test Excel file:", e)
-"""
-
-"""
-def remove_image_file(image_path):
-    if image_path:
-        try:
-            os.remove(image_path)
-            print(f"File {image_path} successfully deleted.")
-        except Exception as e:
-            print(f"Error deleting file {image_path}: {e}")
-    else:
-        print("No valid image path provided for deletion.")
-"""
-
 def select_pdf_and_convert():
     root = tk.Tk()
     root.title("PDF Processing Tool")
@@ -485,3 +371,108 @@ def select_pdf_and_convert():
 if __name__ == "__main__":
     select_pdf_and_convert()
     #test_excel_output()
+
+"""
+Unused Functions:
+
+def remove_image_file(image_path):
+    if image_path:
+        try:
+            os.remove(image_path)
+            print(f"File {image_path} successfully deleted.")
+        except Exception as e:
+            print(f"Error deleting file {image_path}: {e}")
+    else:
+        print("No valid image path provided for deletion.")
+
+def test_excel_output():
+    print("Testing basic DataFrame export...")
+    df_test = pd.DataFrame({'Numbers': [1, 2, 3], 'Letters': ['A', 'B', 'C']})
+    try:
+        df_test.to_excel("test_output.xlsx", index=False)
+        print("Test Excel file created successfully.")
+    except Exception as e:
+        print("Failed to create test Excel file:", e)
+
+def safe_open_image(path):
+    #Context manager for safely opening and closing images.
+    img = Image.open(path)
+    try:
+        yield img
+    finally:
+        img.close()
+
+def is_text_thin(image):
+    # Estimate text thickness based on the distribution of pixel values
+    whites = np.sum(image > 128)
+    blacks = np.sum(image <= 128)
+    return whites / float(whites + blacks) > 0.5
+
+def threshold_otsu(image):
+    # Calculate histogram
+    hist = cv2.calcHist([image], [0], None, [256], [0,256])
+    total = image.size
+    sumB = 0
+    wB = 0
+    maximum = 0.0
+    sum1 = np.sum([i * hist[i] for i in range(256)])
+    for i in range(256):
+        wB += hist[i]
+        if wB == 0:
+            continue
+        wF = total - wB
+        if wF == 0:
+            break
+        sumB += i * hist[i]
+        mB = sumB / wB
+        mF = (sum1 - sumB) / wF
+        between = wB * wF * ((mB - mF) ** 2)
+        if between > maximum:
+            maximum = between
+            level = i
+    return level
+
+def estimate_text_density(image):
+    non_white_pixels = np.sum(image < 255)
+    total_pixels = image.size
+    return non_white_pixels / total_pixels
+
+def detect_content_type(image):
+    # A simple approach based on the ratio of white to black pixels
+    whites = np.sum(image == 255)
+    blacks = np.sum(image == 0)
+    if blacks / float(whites + blacks) > 0.5:  # More dense text regions might indicate numeric content
+        return 'numeric'
+    return 'alphanumeric'
+
+def convert_pdf_to_image(pdf_path):
+    if not os.path.exists(pdf_path):
+        print("PDF file does not exist.")
+        return None
+    
+    doc = fitz.open(pdf_path)
+    if doc.page_count == 0:
+        print("No pages found in document.")
+        doc.close()
+        return None
+
+    try:
+        page = doc.load_page(0)  # Load the first page
+        zoom = 4  # Increased zoom factor for higher resolution
+        mat = fitz.Matrix(zoom, zoom)
+        pix = page.get_pixmap(matrix=mat)
+        img = np.array(Image.open(io.BytesIO(pix.tobytes())))
+        img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+        doc.close()
+        
+        # Check image quality and conditionally apply preprocessing
+        if not is_high_quality_image(img):
+            img = correct_skew(img)
+            img = reduce_noise(img)
+        
+        return img
+    except IndexError:
+        print("Page index out of range.")
+        doc.close()
+        return None
+"""
