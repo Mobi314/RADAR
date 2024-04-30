@@ -319,6 +319,7 @@ def save_to_excel(table_data, workbook, sheet_name):
 def select_pdf_and_convert():
     root = tk.Tk()
     root.title("PDF Processing Tool")
+    root.geometry("600x400")
     
     # Variables to hold the PDF path and page selection
     pdf_path_var = tk.StringVar(root)
