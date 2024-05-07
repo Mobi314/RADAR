@@ -103,8 +103,11 @@ Business Outcomes Due at Start of Current Quarter =
 CALCULATE(
     DISTINCTCOUNT('Table'[Business Outcome JIRA Key]),
     FILTER('Table',
-        ISBLANK('Table'[Business Outcome End Date]) && 'Table'[Business Outcome Baseline End Date Formatted] <= [Current Quarter Start] ||
-        'Table'[Business Outcome End Date] <= [Current Quarter Start] &&
+        (
+            NOT(ISBLANK('Table'[Business Outcome Actual End Date Formatted])) && 'Table'[Business Outcome Actual End Date Formatted] <= [Current Quarter Start] ||
+            ISBLANK('Table'[Business Outcome Actual End Date Formatted]) && NOT(ISBLANK('Table'[Business Outcomes End Date])) && 'Table'[Business Outcomes End Date] <= [Current Quarter Start] ||
+            ISBLANK('Table'[Business Outcome Actual End Date Formatted]) && ISBLANK('Table'[Business Outcomes End Date]) && 'Table'[Business Outcome Baseline End Date Formatted] <= [Current Quarter Start]
+        ) &&
         NOT('Table'[Business Outcome Status] IN {"Open", "IN REVIEW", "Closed"}) &&
         NOT('Table'[Business Outcome Status2] IN {"Open", "IN REVIEW", "Closed"})
     )
@@ -114,10 +117,11 @@ Business Outcomes Due at End of Current Quarter =
 CALCULATE(
     DISTINCTCOUNT('Table'[Business Outcome JIRA Key]),
     FILTER('Table',
-        (NOT(ISBLANK('Table'[Business Outcome End Date])) && 'Table'[Business Outcome End Date] <= [Current Quarter End] &&
-        'Table'[Business Outcome End Date] > [Current Quarter Start]) ||
-        (ISBLANK('Table'[Business Outcome End Date]) && 'Table'[Business Outcome Baseline End Date Formatted] <= [Current Quarter End] &&
-        'Table'[Business Outcome Baseline End Date Formatted] > [Current Quarter Start]) &&
+        (
+            NOT(ISBLANK('Table'[Business Outcome Actual End Date Formatted])) && 'Table'[Business Outcome Actual End Date Formatted] > [Current Quarter Start] && 'Table'[Business Outcome Actual End Date Formatted] <= [Current Quarter End] ||
+            ISBLANK('Table'[Business Outcome Actual End Date Formatted]) && NOT(ISBLANK('Table'[Business Outcomes End Date])) && 'Table'[Business Outcomes End Date] > [Current Quarter Start] && 'Table'[Business Outcomes End Date] <= [Current Quarter End] ||
+            ISBLANK('Table'[Business Outcome Actual End Date Formatted]) && ISBLANK('Table'[Business Outcomes End Date]) && 'Table'[Business Outcome Baseline End Date Formatted] > [Current Quarter Start] && 'Table'[Business Outcome Baseline End Date Formatted] <= [Current Quarter End]
+        ) &&
         NOT('Table'[Business Outcome Status] IN {"Open", "IN REVIEW", "Closed"}) &&
         NOT('Table'[Business Outcome Status2] IN {"Open", "IN REVIEW", "Closed"})
     )
@@ -127,8 +131,11 @@ Business Outcomes Due Next Quarter =
 CALCULATE(
     DISTINCTCOUNT('Table'[Business Outcome JIRA Key]),
     FILTER('Table',
-        (NOT(ISBLANK('Table'[Business Outcome Actual End Date Formatted])) && 'Table'[Business Outcome Actual End Date Formatted] >= [Next Quarter Start] && 'Table'[Business Outcome Actual End Date Formatted] <= [Next Quarter End]) ||
-        (ISBLANK('Table'[Business Outcome Actual End Date Formatted]) && 'Table'[Business Outcome Baseline End Date Formatted] >= [Next Quarter Start] && 'Table'[Business Outcome Baseline End Date Formatted] <= [Next Quarter End]) &&
+        (
+            NOT(ISBLANK('Table'[Business Outcome Actual End Date Formatted])) && 'Table'[Business Outcome Actual End Date Formatted] >= [Next Quarter Start] && 'Table'[Business Outcome Actual End Date Formatted] <= [Next Quarter End] ||
+            ISBLANK('Table'[Business Outcome Actual End Date Formatted]) && NOT(ISBLANK('Table'[Business Outcomes End Date])) && 'Table'[Business Outcomes End Date] >= [Next Quarter Start] && 'Table'[Business Outcomes End Date] <= [Next Quarter End] ||
+            ISBLANK('Table'[Business Outcome Actual End Date Formatted]) && ISBLANK('Table'[Business Outcomes End Date]) && 'Table'[Business Outcome Baseline End Date Formatted] >= [Next Quarter Start] && 'Table'[Business Outcome Baseline End Date Formatted] <= [Next Quarter End]
+        ) &&
         NOT('Table'[Business Outcome Status] IN {"Open", "IN REVIEW", "Closed"}) &&
         NOT('Table'[Business Outcome Status2] IN {"Open", "IN REVIEW", "Closed"})
     )
