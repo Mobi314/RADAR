@@ -1,16 +1,18 @@
 Current Quarter = 
 VAR SelectedDate = SELECTEDVALUE('Table'[Date])
-VAR StartQ1 = DATE(YEAR(SelectedDate) - (MONTH(SelectedDate) < 4), 4, 1)
-VAR StartQ2 = DATE(YEAR(SelectedDate) - (MONTH(SelectedDate) < 7), 7, 1)
-VAR StartQ3 = DATE(YEAR(SelectedDate) - (MONTH(SelectedDate) < 10), 10, 1)
-VAR StartQ4 = DATE(YEAR(SelectedDate) + (MONTH(SelectedDate) > 3), 1, 1)
+VAR FiscalYearStart = DATE(YEAR(SelectedDate) - (MONTH(SelectedDate) < 4), 4, 1)  // Fiscal year starts on April 1st
+VAR Q1Start = FiscalYearStart
+VAR Q2Start = DATE(YEAR(FiscalYearStart), 7, 1)
+VAR Q3Start = DATE(YEAR(FiscalYearStart), 10, 1)
+VAR Q4Start = DATE(YEAR(FiscalYearStart) + 1, 1, 1)
 RETURN
     SWITCH(TRUE(),
-        SelectedDate >= StartQ4, "Q4",
-        SelectedDate >= StartQ3, "Q3",
-        SelectedDate >= StartQ2, "Q2",
-        SelectedDate >= StartQ1, "Q1"
+        SelectedDate < Q2Start, "Q1",
+        SelectedDate < Q3Start, "Q2",
+        SelectedDate < Q4Start, "Q3",
+        "Q4"
     )
+
 
 Next Quarter = 
 SWITCH([Current Quarter],
