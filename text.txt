@@ -35,13 +35,25 @@ RETURN
         "Q4", DATE(YEAR(FiscalYearStart) + 1, 3, 31)
     )
 
-Next Quarter = 
-SWITCH([Current Quarter],
-    "Q1", "Q2",
-    "Q2", "Q3",
-    "Q3", "Q4",
-    "Q4", "Q1"
-)
+Next Quarter Start = 
+VAR CurrentQ = [Current Quarter]
+RETURN
+    SWITCH(CurrentQ,
+        "Q1", DATE(YEAR('Table'[Date]), 7, 1),
+        "Q2", DATE(YEAR('Table'[Date]), 10, 1),
+        "Q3", DATE(YEAR('Table'[Date]) + 1, 1, 1),
+        "Q4", DATE(YEAR('Table'[Date]), 4, 1)
+    )
+
+Next Quarter End = 
+VAR NextQStart = [Next Quarter Start]
+RETURN
+    SWITCH(TRUE(),
+        NextQStart = DATE(YEAR(NextQStart), 4, 1), DATE(YEAR(NextQStart), 6, 30), // End of Q1
+        NextQStart = DATE(YEAR(NextQStart), 7, 1), DATE(YEAR(NextQStart), 9, 30), // End of Q2
+        NextQStart = DATE(YEAR(NextQStart), 10, 1), DATE(YEAR(NextQStart), 12, 31), // End of Q3
+        DATE(YEAR(NextQStart), 3, 31) // End of Q4
+    )
 
 Programs Due at Start of Current Quarter = 
 CALCULATE(
@@ -68,26 +80,11 @@ CALCULATE(
 )
 
 Programs Due Next Quarter = 
-VAR NextQuarterStart = 
-    SWITCH([Current Quarter],
-        "Q1", DATE(YEAR('Table'[Date]), 7, 1),
-        "Q2", DATE(YEAR('Table'[Date]), 10, 1),
-        "Q3", DATE(YEAR('Table'[Date])+1, 1, 1),
-        "Q4", DATE(YEAR('Table'[Date])+1, 4, 1)
-    )
-VAR NextQuarterEnd = 
-    SWITCH([Next Quarter],
-        "Q1", DATE(YEAR(NextQuarterStart), 6, 30),
-        "Q2", DATE(YEAR(NextQuarterStart), 9, 30),
-        "Q3", DATE(YEAR(NextQuarterStart), 12, 31),
-        "Q4", DATE(YEAR(NextQuarterStart), 3, 31)
-    )
-RETURN
 CALCULATE(
     DISTINCTCOUNT('Table'[Program JIRA Key]),
     FILTER('Table',
-        (NOT(ISBLANK('Table'[Program End Date])) && 'Table'[Program End Date] >= NextQuarterStart && 'Table'[Program End Date] <= NextQuarterEnd ||
-         ISBLANK('Table'[Program End Date]) && 'Table'[Program Baseline End Date] >= NextQuarterStart && 'Table'[Program Baseline End Date] <= NextQuarterEnd) &&
+        (NOT(ISBLANK('Table'[Program End Date])) && 'Table'[Program End Date] >= [Next Quarter Start] && 'Table'[Program End Date] <= [Next Quarter End]) ||
+        (ISBLANK('Table'[Program End Date]) && 'Table'[Program Baseline End Date] >= [Next Quarter Start] && 'Table'[Program Baseline End Date] <= [Next Quarter End]) &&
         NOT('Table'[Program Status] IN {"Open", "IN REVIEW", "Closed"}) &&
         NOT('Table'[Program Status2] IN {"Open", "IN REVIEW", "Closed"})
     )
@@ -97,8 +94,8 @@ Business Outcomes Due at Start of Current Quarter =
 CALCULATE(
     DISTINCTCOUNT('Table'[Business Outcome JIRA Key]),
     FILTER('Table',
-        ISBLANK('Table'[Business Outcome End Date]) && 'Table'[Business Outcome Baseline End Date Formatted] <= STARTOFQUARTER('Table'[Date]) ||
-        'Table'[Business Outcome End Date] <= STARTOFQUARTER('Table'[Date]) &&
+        ISBLANK('Table'[Business Outcome End Date]) && 'Table'[Business Outcome Baseline End Date Formatted] <= [Current Quarter Start] ||
+        'Table'[Business Outcome End Date] <= [Current Quarter Start] &&
         NOT('Table'[Business Outcome Status] IN {"Open", "IN REVIEW", "Closed"}) &&
         NOT('Table'[Business Outcome Status2] IN {"Open", "IN REVIEW", "Closed"})
     )
@@ -108,35 +105,21 @@ Business Outcomes Due at End of Current Quarter =
 CALCULATE(
     DISTINCTCOUNT('Table'[Business Outcome JIRA Key]),
     FILTER('Table',
-        (NOT(ISBLANK('Table'[Business Outcome End Date])) && 'Table'[Business Outcome End Date] <= ENDOFQUARTER('Table'[Date]) ||
-         ISBLANK('Table'[Business Outcome End Date]) && 'Table'[Business Outcome Baseline End Date Formatted] <= ENDOFQUARTER('Table'[Date])) &&
-        'Table'[Business Outcome End Date] > STARTOFQUARTER('Table'[Date]) &&
+        (NOT(ISBLANK('Table'[Business Outcome End Date])) && 'Table'[Business Outcome End Date] <= [Current Quarter End] &&
+        'Table'[Business Outcome End Date] > [Current Quarter Start]) ||
+        (ISBLANK('Table'[Business Outcome End Date]) && 'Table'[Business Outcome Baseline End Date Formatted] <= [Current Quarter End] &&
+        'Table'[Business Outcome Baseline End Date Formatted] > [Current Quarter Start]) &&
         NOT('Table'[Business Outcome Status] IN {"Open", "IN REVIEW", "Closed"}) &&
         NOT('Table'[Business Outcome Status2] IN {"Open", "IN REVIEW", "Closed"})
     )
 )
 
 Business Outcomes Due Next Quarter = 
-VAR NextQuarterStart = 
-    SWITCH([Current Quarter],
-        "Q1", DATE(YEAR('Table'[Date]), 7, 1),
-        "Q2", DATE(YEAR('Table'[Date]), 10, 1),
-        "Q3", DATE(YEAR('Table'[Date])+1, 1, 1),
-        "Q4", DATE(YEAR('Table'[Date])+1, 4, 1)
-    )
-VAR NextQuarterEnd = 
-    SWITCH([Next Quarter],
-        "Q1", DATE(YEAR(NextQuarterStart), 6, 30),
-        "Q2", DATE(YEAR(NextQuarterStart), 9, 30),
-        "Q3", DATE(YEAR(NextQuarterStart), 12, 31),
-        "Q4", DATE(YEAR(NextQuarterStart), 3, 31)
-    )
-RETURN
 CALCULATE(
     DISTINCTCOUNT('Table'[Business Outcome JIRA Key]),
     FILTER('Table',
-        (NOT(ISBLANK('Table'[Business Outcome Actual End Date Formatted])) && 'Table'[Business Outcome Actual End Date Formatted] >= NextQuarterStart && 'Table'[Business Outcome Actual End Date Formatted] <= NextQuarterEnd ||
-         ISBLANK('Table'[Business Outcome Actual End Date Formatted]) && 'Table'[Business Outcome Baseline End Date Formatted] >= NextQuarterStart && 'Table'[Business Outcome Baseline End Date Formatted] <= NextQuarterEnd) &&
+        (NOT(ISBLANK('Table'[Business Outcome Actual End Date Formatted])) && 'Table'[Business Outcome Actual End Date Formatted] >= [Next Quarter Start] && 'Table'[Business Outcome Actual End Date Formatted] <= [Next Quarter End]) ||
+        (ISBLANK('Table'[Business Outcome Actual End Date Formatted]) && 'Table'[Business Outcome Baseline End Date Formatted] >= [Next Quarter Start] && 'Table'[Business Outcome Baseline End Date Formatted] <= [Next Quarter End]) &&
         NOT('Table'[Business Outcome Status] IN {"Open", "IN REVIEW", "Closed"}) &&
         NOT('Table'[Business Outcome Status2] IN {"Open", "IN REVIEW", "Closed"})
     )
