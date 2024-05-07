@@ -13,6 +13,27 @@ RETURN
         "Q4"
     )
 
+Current Quarter Start = 
+VAR CurrentQ = [Current Quarter]
+VAR FiscalYearStart = DATE(YEAR(TODAY()) - (MONTH(TODAY()) < 4), 4, 1)
+RETURN
+    SWITCH(CurrentQ,
+        "Q1", FiscalYearStart,
+        "Q2", DATE(YEAR(FiscalYearStart), 7, 1),
+        "Q3", DATE(YEAR(FiscalYearStart), 10, 1),
+        "Q4", DATE(YEAR(FiscalYearStart) + 1, 1, 1)
+    )
+
+Current Quarter End = 
+VAR CurrentQ = [Current Quarter]
+VAR FiscalYearStart = DATE(YEAR(TODAY()) - (MONTH(TODAY()) < 4), 4, 1)
+RETURN
+    SWITCH(CurrentQ,
+        "Q1", DATE(YEAR(FiscalYearStart), 6, 30),
+        "Q2", DATE(YEAR(FiscalYearStart), 9, 30),
+        "Q3", DATE(YEAR(FiscalYearStart), 12, 31),
+        "Q4", DATE(YEAR(FiscalYearStart) + 1, 3, 31)
+    )
 
 Next Quarter = 
 SWITCH([Current Quarter],
@@ -26,8 +47,8 @@ Programs Due at Start of Current Quarter =
 CALCULATE(
     DISTINCTCOUNT('Table'[Program JIRA Key]),
     FILTER('Table',
-        ISBLANK('Table'[Program End Date]) && 'Table'[Program Baseline End Date] <= STARTOFQUARTER('Table'[Date]) ||
-        'Table'[Program End Date] <= STARTOFQUARTER('Table'[Date]) &&
+        (ISBLANK('Table'[Program End Date]) && 'Table'[Program Baseline End Date] <= [Current Quarter Start]) ||
+        ('Table'[Program End Date] <= [Current Quarter Start]) &&
         NOT('Table'[Program Status] IN {"Open", "IN REVIEW", "Closed"}) &&
         NOT('Table'[Program Status2] IN {"Open", "IN REVIEW", "Closed"})
     )
@@ -37,9 +58,10 @@ Programs Due at End of Current Quarter =
 CALCULATE(
     DISTINCTCOUNT('Table'[Program JIRA Key]),
     FILTER('Table',
-        (NOT(ISBLANK('Table'[Program End Date])) && 'Table'[Program End Date] <= ENDOFQUARTER('Table'[Date]) ||
-         ISBLANK('Table'[Program End Date]) && 'Table'[Program Baseline End Date] <= ENDOFQUARTER('Table'[Date])) &&
-        'Table'[Program End Date] > STARTOFQUARTER('Table'[Date]) &&
+        (NOT(ISBLANK('Table'[Program End Date])) && 'Table'[Program End Date] <= [Current Quarter End] &&
+        'Table'[Program End Date] > [Current Quarter Start]) ||
+        (ISBLANK('Table'[Program End Date]) && 'Table'[Program Baseline End Date] <= [Current Quarter End] &&
+        'Table'[Program Baseline End Date] > [Current Quarter Start]) &&
         NOT('Table'[Program Status] IN {"Open", "IN REVIEW", "Closed"}) &&
         NOT('Table'[Program Status2] IN {"Open", "IN REVIEW", "Closed"})
     )
