@@ -36,23 +36,24 @@ RETURN
     )
 
 Next Quarter Start = 
+VAR SelectedDate = SELECTEDVALUE('Table'[Date])
 VAR CurrentQ = [Current Quarter]
 RETURN
     SWITCH(CurrentQ,
-        "Q1", DATE(YEAR('Table'[Date]), 7, 1),
-        "Q2", DATE(YEAR('Table'[Date]), 10, 1),
-        "Q3", DATE(YEAR('Table'[Date]) + 1, 1, 1),
-        "Q4", DATE(YEAR('Table'[Date]), 4, 1)
+        "Q1", DATE(YEAR(SelectedDate), 7, 1),   // If current is Q1, next is Q2 starting July 1
+        "Q2", DATE(YEAR(SelectedDate), 10, 1),  // If current is Q2, next is Q3 starting October 1
+        "Q3", DATE(YEAR(SelectedDate) + (MONTH(SelectedDate) <= 12), 1, 1),  // If current is Q3, next is Q4 starting January 1
+        "Q4", DATE(YEAR(SelectedDate) + (MONTH(SelectedDate) <= 3), 4, 1)   // If current is Q4, next is Q1 starting April 1 next year
     )
 
 Next Quarter End = 
 VAR NextQStart = [Next Quarter Start]
 RETURN
-    SWITCH(TRUE(),
-        NextQStart = DATE(YEAR(NextQStart), 4, 1), DATE(YEAR(NextQStart), 6, 30), // End of Q1
-        NextQStart = DATE(YEAR(NextQStart), 7, 1), DATE(YEAR(NextQStart), 9, 30), // End of Q2
-        NextQStart = DATE(YEAR(NextQStart), 10, 1), DATE(YEAR(NextQStart), 12, 31), // End of Q3
-        DATE(YEAR(NextQStart), 3, 31) // End of Q4
+    SWITCH(MONTH(NextQStart),
+        1, DATE(YEAR(NextQStart), 3, 31),  // End of Q4
+        4, DATE(YEAR(NextQStart), 6, 30),  // End of Q1
+        7, DATE(YEAR(NextQStart), 9, 30),  // End of Q2
+        10, DATE(YEAR(NextQStart), 12, 31) // End of Q3
     )
 
 Programs Due at Start of Current Quarter = 
